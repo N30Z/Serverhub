@@ -6,7 +6,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.serverhub.android.data.api.ConnectionState
 import com.serverhub.android.data.api.ServerHubApi
+import com.serverhub.android.data.model.Alert
 import com.serverhub.android.data.model.SystemMetrics
+import com.serverhub.android.data.model.generateAlerts
 import com.serverhub.android.data.repository.MetricsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +38,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState
 
+    private val _alerts = MutableStateFlow<List<Alert>>(emptyList())
+    val alerts: StateFlow<List<Alert>> = _alerts
+
     val savedUrl: String get() = prefs.getString("server_url", "") ?: ""
     val savedUsername: String get() = prefs.getString("username", "") ?: ""
 
@@ -43,7 +48,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.messages.collect { msg ->
                 try {
-                    _metrics.value = jsonParser.decodeFromString(msg)
+                    val m = jsonParser.decodeFromString<SystemMetrics>(msg)
+                    _metrics.value = m
+                    _alerts.value = m.generateAlerts()
                 } catch (_: Exception) {}
             }
         }
@@ -88,6 +95,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.disconnect()
         prefs.edit().remove("token").apply()
         _metrics.value = null
+        _alerts.value = emptyList()
         _connectionState.value = ConnectionState.Disconnected
         _uiState.value = UiState.Login
     }
