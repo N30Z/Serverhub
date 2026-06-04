@@ -81,6 +81,11 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/api/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/auth/logout", s.withAuth(s.handleLogout))
 	mux.HandleFunc("/api/metrics", s.withAuth(s.handleMetrics))
+	mux.HandleFunc("/api/files/read", s.withAuth(s.handleFileRead))
+	mux.HandleFunc("/api/files", s.withAuth(s.handleFiles))
+	mux.HandleFunc("/api/exec", s.withAuth(s.handleExec))
+	mux.HandleFunc("/api/cron/", s.withAuth(s.handleCronByID))
+	mux.HandleFunc("/api/cron", s.withAuth(s.handleCron))
 	mux.HandleFunc("/ws", s.handleWS) // token via query param
 	mux.Handle("/", s.spaHandler())
 

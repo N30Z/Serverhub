@@ -198,11 +198,15 @@ fun AppNavigation(viewModel: MainViewModel) {
             composable(Routes.SSH) {
                 SshScreen(
                     metrics = metrics,
+                    onExec = { cmd -> viewModel.exec(cmd) },
                     onOpenDrawer = { scope.launch { drawerState.open() } }
                 )
             }
             composable(Routes.FILES) {
-                FilesScreen(onOpenDrawer = { scope.launch { drawerState.open() } })
+                FilesScreen(
+                    onListFiles = { path -> viewModel.listFiles(path) },
+                    onOpenDrawer = { scope.launch { drawerState.open() } }
+                )
             }
             composable(Routes.CRON) {
                 val cronJobs by viewModel.cronJobs.collectAsState()

@@ -5,6 +5,7 @@ package com.serverhub.android.ui.files
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,11 +24,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,20 +38,21 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.serverhub.android.data.model.FileEntry
 import com.serverhub.android.ui.theme.AccentBlue
 import com.serverhub.android.ui.theme.AccentYellow
 import com.serverhub.android.ui.theme.BgPrimary
@@ -59,46 +62,46 @@ import com.serverhub.android.ui.theme.BorderDefault
 import com.serverhub.android.ui.theme.TextMuted
 import com.serverhub.android.ui.theme.TextPrimary
 import com.serverhub.android.ui.theme.TextSecondary
-
-private data class FsEntry(
-    val name: String,
-    val isDir: Boolean,
-    val size: String = "",
-    val modified: String = "Jan 01 00:00",
-    val permissions: String = if (true) "drwxr-xr-x" else "-rw-r--r--"
-)
-
-private val FS_TREE: Map<String, List<FsEntry>> = mapOf(
-    "/"          to listOf("bin","boot","dev","etc","home","lib","opt","proc","root","run","sbin","srv","sys","tmp","usr","var").map { FsEntry(it, true) },
-    "/etc"       to listOf(FsEntry("fstab",false,"1.2K"), FsEntry("hosts",false,"218B"), FsEntry("hostname",false,"12B"), FsEntry("passwd",false,"2.3K"), FsEntry("group",false,"1.1K"), FsEntry("nginx",true), FsEntry("systemd",true), FsEntry("cron.d",true), FsEntry("ssh",true), FsEntry("apt",true)),
-    "/etc/nginx" to listOf(FsEntry("nginx.conf",false,"2.8K"), FsEntry("sites-available",true), FsEntry("sites-enabled",true), FsEntry("conf.d",true)),
-    "/home"      to listOf(FsEntry("admin",true)),
-    "/home/admin"to listOf(FsEntry(".bashrc",false,"3.5K"), FsEntry(".profile",false,"807B"), FsEntry(".bash_history",false,"12K"), FsEntry(".ssh",true), FsEntry("scripts",true), FsEntry("logs",true)),
-    "/root"      to listOf(FsEntry(".bashrc",false,"3.5K"), FsEntry(".profile",false,"807B"), FsEntry(".bash_history",false,"24K"), FsEntry(".ssh",true), FsEntry("scripts",true)),
-    "/var"       to listOf("backups","cache","lib","log","mail","opt","run","spool","tmp","www").map { FsEntry(it, true) },
-    "/var/log"   to listOf(FsEntry("syslog",false,"48M","Jan 04 12:31"), FsEntry("auth.log",false,"8.2M","Jan 04 09:11"), FsEntry("kern.log",false,"2.1M"), FsEntry("dpkg.log",false,"1.4M"), FsEntry("nginx",true), FsEntry("apt",true)),
-    "/var/www"   to listOf(FsEntry("html",true)),
-    "/tmp"       to listOf(FsEntry(".ICE-unix",true), FsEntry("snap-private-tmp",true)),
-    "/usr"       to listOf("bin","include","lib","local","sbin","share").map { FsEntry(it, true) },
-)
-
-private fun dirContents(path: String): List<FsEntry> =
-    FS_TREE[path] ?: FS_TREE.entries.filter { path.startsWith(it.key + "/") && it.key != path }.minByOrNull { path.length - it.key.length }?.value ?: emptyList()
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
-fun FilesScreen(onOpenDrawer: () -> Unit) {
-    var cwd   by remember { mutableStateOf("/") }
-    var query by remember { mutableStateOf("") }
+fun FilesScreen(
+    onListFiles: suspend (String) -> Result<List<FileEntry>>,
+    onOpenDrawer: () -> Unit
+) {
+    var cwd     by remember { mutableStateOf("/") }
+    var query   by remember { mutableStateOf("") }
+    var entries by remember { mutableStateOf<List<FileEntry>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var error   by remember { mutableStateOf<String?>(null) }
+    val scope   = rememberCoroutineScope()
 
-    val entries = dirContents(cwd).filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
-    val canGoUp = cwd != "/"
+    fun load(path: String) {
+        loading = true; error = null
+        scope.launch {
+            onListFiles(path).fold(
+                onSuccess = { list -> entries = list.sortedWith(compareByDescending<FileEntry> { it.isDir }.thenBy { it.name }); cwd = path; query = "" },
+                onFailure = { error = it.message }
+            )
+            loading = false
+        }
+    }
+
+    LaunchedEffect(Unit) { load("/") }
+
+    val visible = if (query.isBlank()) entries
+                  else entries.filter { it.name.contains(query, ignoreCase = true) }
 
     Column(Modifier.fillMaxSize().background(BgPrimary)) {
         TopAppBar(
             title = { Text("File Manager", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary) },
             navigationIcon = { IconButton(onClick = onOpenDrawer) { Icon(Icons.Default.Menu, null, tint = TextSecondary) } },
             actions = {
-                IconButton(onClick = { cwd = "/root" }) { Icon(Icons.Default.Home, null, tint = TextSecondary) }
+                IconButton(onClick = { load("/root") }) { Icon(Icons.Default.Home, null, tint = TextSecondary) }
+                IconButton(onClick = { load(cwd) }) { Icon(Icons.Default.Refresh, null, tint = TextSecondary) }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = BgSecondary)
         )
@@ -108,29 +111,25 @@ fun FilesScreen(onOpenDrawer: () -> Unit) {
             modifier = Modifier.fillMaxWidth().background(BgSecondary).padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (canGoUp) {
-                IconButton(onClick = {
-                    cwd = cwd.substringBeforeLast("/").ifEmpty { "/" }
-                    query = ""
-                }, modifier = Modifier.size(28.dp)) {
+            if (cwd != "/") {
+                IconButton(
+                    onClick = { load(cwd.substringBeforeLast("/").ifEmpty { "/" }) },
+                    modifier = Modifier.size(28.dp)
+                ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
                 }
                 Spacer(Modifier.width(4.dp))
             }
-            Text(
-                cwd,
-                fontSize = 12.sp,
-                color = TextSecondary,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.weight(1f)
-            )
+            Text(cwd, fontSize = 12.sp, color = TextSecondary, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
         }
 
         HorizontalDivider(color = BorderDefault, thickness = 0.5.dp)
 
         // Search
         Row(
-            modifier = Modifier.fillMaxWidth().background(BgSecondary)
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(BgSecondary)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(BgTertiary)
@@ -152,44 +151,52 @@ fun FilesScreen(onOpenDrawer: () -> Unit) {
             )
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 12.dp)
-        ) {
-            items(entries, key = { it.name }) { entry ->
-                FileRow(entry, onClick = {
-                    if (entry.isDir) {
-                        cwd = if (cwd == "/") "/${entry.name}" else "$cwd/${entry.name}"
-                        query = ""
-                    }
-                })
-                HorizontalDivider(color = BorderDefault, thickness = 0.5.dp)
+        when {
+            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = AccentBlue)
             }
-
-            if (entries.isEmpty()) {
-                item {
-                    Text(
-                        if (query.isNotEmpty()) "No files matching "$query"" else "(empty directory)",
-                        color = TextMuted,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(16.dp)
-                    )
+            error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
+                    Text(error ?: "Error loading directory", color = TextSecondary, fontSize = 13.sp)
+                }
+            }
+            else -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 12.dp)) {
+                items(visible, key = { it.path }) { entry ->
+                    FileRow(entry, onClick = { if (entry.isDir) load(entry.path) })
+                    HorizontalDivider(color = BorderDefault, thickness = 0.5.dp)
+                }
+                if (visible.isEmpty()) {
+                    item {
+                        Text(
+                            if (query.isNotEmpty()) "No files matching \"$query\"" else "(empty directory)",
+                            color = TextMuted, fontSize = 13.sp, modifier = Modifier.padding(16.dp)
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+private val dateFmt = SimpleDateFormat("MMM dd HH:mm", Locale.getDefault())
+
 @Composable
-private fun FileRow(entry: FsEntry, onClick: () -> Unit) {
+private fun FileRow(entry: FileEntry, onClick: () -> Unit) {
     val (icon, tint) = when {
-        entry.isDir                                         -> Icons.Default.Folder to AccentBlue
+        entry.isDir -> Icons.Default.Folder to AccentBlue
         entry.name.endsWith(".tar.gz") || entry.name.endsWith(".zip") || entry.name.endsWith(".deb") ->
             Icons.Default.Archive to AccentYellow
         entry.name.endsWith(".conf") || entry.name.endsWith(".cfg") || entry.name.endsWith(".ini") ->
             Icons.Default.Settings to TextSecondary
-        else                                               -> Icons.Default.Description to TextSecondary
+        else -> Icons.Default.Description to TextSecondary
     }
+    val sizeStr = when {
+        entry.isDir            -> ""
+        entry.size >= 1048576  -> "${"%.1f".format(entry.size / 1048576.0)} MB"
+        entry.size >= 1024     -> "${"%.1f".format(entry.size / 1024.0)} KB"
+        else                   -> "${entry.size} B"
+    }
+    val modStr = dateFmt.format(Date(entry.modTime * 1000))
 
     Row(
         modifier = Modifier
@@ -203,17 +210,16 @@ private fun FileRow(entry: FsEntry, onClick: () -> Unit) {
             Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
             Column {
-                Text(entry.name, fontSize = 13.sp, color = TextPrimary, fontWeight = if (entry.isDir) FontWeight.Medium else FontWeight.Normal, maxLines = 1)
                 Text(
-                    "${entry.permissions}   ${entry.modified}",
-                    fontSize = 10.sp,
-                    color = TextMuted,
-                    fontFamily = FontFamily.Monospace
+                    entry.name, fontSize = 13.sp, color = TextPrimary,
+                    fontWeight = if (entry.isDir) FontWeight.Medium else FontWeight.Normal,
+                    maxLines = 1
                 )
+                Text("${entry.mode}   $modStr", fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
             }
         }
-        if (entry.size.isNotEmpty()) {
-            Text(entry.size, fontSize = 11.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+        if (sizeStr.isNotEmpty()) {
+            Text(sizeStr, fontSize = 11.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
         }
     }
 }

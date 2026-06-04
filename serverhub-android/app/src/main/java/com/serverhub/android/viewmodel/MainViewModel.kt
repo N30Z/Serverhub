@@ -8,13 +8,14 @@ import com.serverhub.android.data.api.ConnectionState
 import com.serverhub.android.data.api.ServerHubApi
 import com.serverhub.android.data.model.Alert
 import com.serverhub.android.data.model.CronJob
+import com.serverhub.android.data.model.ExecResult
+import com.serverhub.android.data.model.FileEntry
 import com.serverhub.android.data.model.SystemMetrics
 import com.serverhub.android.data.model.generateAlerts
 import com.serverhub.android.data.repository.MetricsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 sealed class UiState {
@@ -30,6 +31,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("serverhub", Context.MODE_PRIVATE)
     private val repository = MetricsRepository()
     private val jsonParser = Json { ignoreUnknownKeys = true }
+
+    // Authenticated API instance — set after successful login or on restore.
+    private var api: ServerHubApi? = null
 
     private val _metrics = MutableStateFlow<SystemMetrics?>(null)
     val metrics: StateFlow<SystemMetrics?> = _metrics
@@ -65,13 +69,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        _cronJobs.value = loadCronJobs()
-
         val token = prefs.getString("token", null)
         val url = savedUrl
         if (!token.isNullOrEmpty() && url.isNotEmpty()) {
+            api = ServerHubApi(url).also { it.token = token }
             repository.connect(url, token)
             _uiState.value = UiState.Dashboard
+            viewModelScope.launch { refreshCronJobs() }
         } else {
             _uiState.value = UiState.Login
         }
@@ -81,15 +85,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val normalizedUrl = url.trimEnd('/')
         viewModelScope.launch {
             _uiState.value = UiState.LoggingIn
-            ServerHubApi(normalizedUrl).login(username, password).fold(
+            val serverApi = ServerHubApi(normalizedUrl)
+            serverApi.login(username, password).fold(
                 onSuccess = { token ->
                     prefs.edit()
                         .putString("server_url", normalizedUrl)
                         .putString("username", username)
                         .putString("token", token)
                         .apply()
+                    api = serverApi
                     repository.connect(normalizedUrl, token)
                     _uiState.value = UiState.Dashboard
+                    refreshCronJobs()
                 },
                 onFailure = { error ->
                     _uiState.value = UiState.LoginError(error.message ?: "Login failed")
@@ -101,37 +108,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun logout() {
         repository.disconnect()
         prefs.edit().remove("token").apply()
+        api = null
         _metrics.value = null
         _alerts.value = emptyList()
+        _cronJobs.value = emptyList()
         _connectionState.value = ConnectionState.Disconnected
         _uiState.value = UiState.Login
     }
 
+    // ── Files ─────────────────────────────────────────────────────────────────
+
+    suspend fun listFiles(path: String): Result<List<FileEntry>> =
+        api?.listFiles(path) ?: Result.failure(Exception("Not connected"))
+
+    // ── Exec ──────────────────────────────────────────────────────────────────
+
+    suspend fun exec(command: String): Result<ExecResult> =
+        api?.exec(command) ?: Result.failure(Exception("Not connected"))
+
+    // ── Cron ──────────────────────────────────────────────────────────────────
+
+    private suspend fun refreshCronJobs() {
+        api?.listCron()?.onSuccess { _cronJobs.value = it }
+    }
+
     fun addCronJob(job: CronJob) {
-        val updated = _cronJobs.value + job
-        _cronJobs.value = updated
-        saveCronJobs(updated)
+        viewModelScope.launch {
+            api?.addCron(job)?.onSuccess { created ->
+                _cronJobs.value = _cronJobs.value + created
+            }
+        }
     }
 
     fun updateCronJob(job: CronJob) {
-        val updated = _cronJobs.value.map { if (it.id == job.id) job else it }
-        _cronJobs.value = updated
-        saveCronJobs(updated)
+        viewModelScope.launch {
+            api?.updateCron(job)?.onSuccess { updated ->
+                _cronJobs.value = _cronJobs.value.map { if (it.id == updated.id) updated else it }
+            }
+        }
     }
 
     fun deleteCronJob(id: String) {
-        val updated = _cronJobs.value.filter { it.id != id }
-        _cronJobs.value = updated
-        saveCronJobs(updated)
-    }
-
-    private fun saveCronJobs(jobs: List<CronJob>) {
-        prefs.edit().putString("cron_jobs", jsonParser.encodeToString(jobs)).apply()
-    }
-
-    private fun loadCronJobs(): List<CronJob> {
-        val raw = prefs.getString("cron_jobs", null) ?: return emptyList()
-        return try { jsonParser.decodeFromString(raw) } catch (_: Exception) { emptyList() }
+        viewModelScope.launch {
+            api?.deleteCron(id)?.onSuccess {
+                _cronJobs.value = _cronJobs.value.filter { it.id != id }
+            }
+        }
     }
 
     override fun onCleared() {
