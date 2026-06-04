@@ -3,6 +3,7 @@
 package com.serverhub.android.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Menu
@@ -33,8 +35,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -119,6 +126,8 @@ fun DashboardScreen(
             return@Column
         }
 
+        var activeDetail by remember { mutableStateOf<DetailTarget?>(null) }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(12.dp),
@@ -130,30 +139,30 @@ fun DashboardScreen(
             // ── CPU + Memory (side-by-side donut cards) ───────────────────────
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CpuCard(metrics, Modifier.weight(1f))
-                    MemoryCard(metrics, Modifier.weight(1f))
+                    CpuCard(metrics, Modifier.weight(1f).tappable { activeDetail = DetailTarget.CPU })
+                    MemoryCard(metrics, Modifier.weight(1f).tappable { activeDetail = DetailTarget.MEMORY })
                 }
             }
 
             // ── Network ───────────────────────────────────────────────────────
             if (metrics.network.interfaces.isNotEmpty()) {
-                item { NetworkCard(metrics) }
+                item { NetworkCard(metrics, Modifier.tappable { activeDetail = DetailTarget.NETWORK }) }
             }
 
             // ── Load Average ──────────────────────────────────────────────────
-            item { LoadCard(metrics) }
+            item { LoadCard(metrics, Modifier.tappable { activeDetail = DetailTarget.LOAD }) }
 
             // ── Filesystems ───────────────────────────────────────────────────
             if (metrics.disk.isNotEmpty()) {
-                item { FilesystemsCard(metrics) }
+                item { FilesystemsCard(metrics, Modifier.tappable { activeDetail = DetailTarget.DISK }) }
             }
 
             // ── Memory Breakdown ──────────────────────────────────────────────
-            item { MemoryBreakdownCard(metrics) }
+            item { MemoryBreakdownCard(metrics, Modifier.tappable { activeDetail = DetailTarget.MEMORY }) }
 
             // ── Temperatures ──────────────────────────────────────────────────
             if (metrics.temperatures.isNotEmpty()) {
-                item { TemperaturesCard(metrics) }
+                item { TemperaturesCard(metrics, Modifier.tappable { activeDetail = DetailTarget.TEMPERATURE }) }
             }
 
             // ── Top Processes ─────────────────────────────────────────────────
@@ -176,8 +185,19 @@ fun DashboardScreen(
                 item { DockerCard(metrics) }
             }
         }
+
+        activeDetail?.let { target ->
+            MetricDetailSheet(
+                target = target,
+                metrics = metrics,
+                onDismiss = { activeDetail = null }
+            )
+        }
     }
 }
+
+private fun Modifier.tappable(onClick: () -> Unit): Modifier =
+    this.clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)
 
 // ── Widgets ───────────────────────────────────────────────────────────────────
 
@@ -257,8 +277,8 @@ private fun MemoryCard(m: SystemMetrics, modifier: Modifier) {
 }
 
 @Composable
-private fun NetworkCard(m: SystemMetrics) {
-    MetricCard(Modifier.fillMaxWidth()) {
+private fun NetworkCard(m: SystemMetrics, modifier: Modifier = Modifier) {
+    MetricCard(modifier.fillMaxWidth()) {
         CardHeader(label = "Network", icon = Icons.Default.NetworkCheck, trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -315,8 +335,8 @@ private fun NetworkCard(m: SystemMetrics) {
 }
 
 @Composable
-private fun LoadCard(m: SystemMetrics) {
-    MetricCard(Modifier.fillMaxWidth()) {
+private fun LoadCard(m: SystemMetrics, modifier: Modifier = Modifier) {
+    MetricCard(modifier.fillMaxWidth()) {
         CardHeader(label = "Load Average", icon = Icons.Default.Speed)
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -344,8 +364,8 @@ private fun LoadItem(label: String, value: Double) {
 }
 
 @Composable
-private fun FilesystemsCard(m: SystemMetrics) {
-    MetricCard(Modifier.fillMaxWidth()) {
+private fun FilesystemsCard(m: SystemMetrics, modifier: Modifier = Modifier) {
+    MetricCard(modifier.fillMaxWidth()) {
         CardHeader(label = "Filesystems", icon = Icons.Default.Storage)
         m.disk.forEach { disk ->
             Spacer(Modifier.height(10.dp))
@@ -368,8 +388,8 @@ private fun FilesystemsCard(m: SystemMetrics) {
 }
 
 @Composable
-private fun MemoryBreakdownCard(m: SystemMetrics) {
-    MetricCard(Modifier.fillMaxWidth()) {
+private fun MemoryBreakdownCard(m: SystemMetrics, modifier: Modifier = Modifier) {
+    MetricCard(modifier.fillMaxWidth()) {
         CardHeader(label = "Memory Map", icon = Icons.Default.Memory)
         Spacer(Modifier.height(10.dp))
 
@@ -421,8 +441,8 @@ private fun LegendItem(label: String, value: String, color: androidx.compose.ui.
 }
 
 @Composable
-private fun TemperaturesCard(m: SystemMetrics) {
-    MetricCard(Modifier.fillMaxWidth()) {
+private fun TemperaturesCard(m: SystemMetrics, modifier: Modifier = Modifier) {
+    MetricCard(modifier.fillMaxWidth()) {
         CardHeader(label = "Temperatures", icon = Icons.Default.Thermostat)
         m.temperatures.forEach { temp ->
             Spacer(Modifier.height(8.dp))

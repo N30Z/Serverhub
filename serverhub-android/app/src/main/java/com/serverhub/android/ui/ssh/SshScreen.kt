@@ -3,8 +3,8 @@
 package com.serverhub.android.ui.ssh
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,16 +17,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -48,55 +48,115 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.serverhub.android.data.model.SystemMetrics
+import com.serverhub.android.ui.theme.AccentBlue
 import com.serverhub.android.ui.theme.AccentGreen
+import com.serverhub.android.ui.theme.AccentRed
+import com.serverhub.android.ui.theme.AccentYellow
 import com.serverhub.android.ui.theme.BgPrimary
 import com.serverhub.android.ui.theme.BgSecondary
 import com.serverhub.android.ui.theme.BgTertiary
+import com.serverhub.android.ui.theme.BorderDefault
 import com.serverhub.android.ui.theme.TextMuted
 import com.serverhub.android.ui.theme.TextPrimary
 import com.serverhub.android.ui.theme.TextSecondary
 
-private val quickCommands = listOf("ls", "ls -la", "pwd", "top", "df -h", "free -h", "ps aux", "uptime", "whoami")
+private val QUICK_CMDS = listOf("ls -la", "ps aux", "df -h", "free -h", "uptime", "top", "who", "ifconfig", "docker ps", "systemctl list-units", "hostname", "uname -a", "clear")
+
+private data class TermLine(val text: String, val kind: CommandProcessor.LineKind)
 
 @Composable
-fun SshScreen(onOpenDrawer: () -> Unit) {
-    val lines = remember { mutableStateListOf("ServerHub SSH Terminal — agent SSH support required", "") }
-    var input by remember { mutableStateOf("") }
+fun SshScreen(metrics: SystemMetrics?, onOpenDrawer: () -> Unit) {
+    val hostname = metrics?.hostname ?: "server"
+    val lines    = remember { mutableStateListOf<TermLine>() }
+    val history  = remember { mutableStateListOf<String>() }
+    var histIdx  by remember { mutableStateOf(-1) }
+    var input    by remember { mutableStateOf("") }
+    var cwd      by remember { mutableStateOf("/root") }
     val listState = rememberLazyListState()
+
+    // Welcome banner
+    LaunchedEffect(Unit) {
+        val banner = metrics?.let {
+            listOf(
+                TermLine("ServerHub Pseudo-Terminal  —  ${it.hostname}", CommandProcessor.LineKind.HEADER),
+                TermLine("OS: ${it.os}  Kernel: ${it.kernel}", CommandProcessor.LineKind.MUTED),
+                TermLine("Uptime: ${it.uptime / 3600}h  Load: ${"%.2f".format(it.load.load1)}", CommandProcessor.LineKind.MUTED),
+                TermLine("Type 'help' for available commands.", CommandProcessor.LineKind.MUTED),
+                TermLine("", CommandProcessor.LineKind.NORMAL),
+            )
+        } ?: listOf(TermLine("ServerHub Pseudo-Terminal  —  (waiting for metrics…)", CommandProcessor.LineKind.MUTED))
+        lines.addAll(banner)
+    }
 
     LaunchedEffect(lines.size) {
         if (lines.isNotEmpty()) listState.animateScrollToItem(lines.size - 1)
     }
 
+    fun submit() {
+        val cmd = input.trim()
+        if (cmd.isEmpty()) return
+        history.add(0, cmd)
+        histIdx = -1
+        lines += TermLine("${promptStr(hostname, cwd)} $cmd", CommandProcessor.LineKind.PROMPT)
+        if (cmd == "clear") {
+            lines.clear()
+        } else {
+            val (out, nextCwd) = CommandProcessor.process(cmd, metrics, cwd)
+            cwd = nextCwd
+            out.forEach { l -> lines += TermLine(l.text, l.kind) }
+        }
+        lines += TermLine("", CommandProcessor.LineKind.NORMAL)
+        input = ""
+    }
+
     Column(Modifier.fillMaxSize().background(BgPrimary)) {
         TopAppBar(
-            title = { Text("SSH Terminal", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary) },
+            title = {
+                Column {
+                    Text("SSH Terminal", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                    Text("$hostname:$cwd", fontSize = 11.sp, color = AccentGreen, fontFamily = FontFamily.Monospace)
+                }
+            },
             navigationIcon = { IconButton(onClick = onOpenDrawer) { Icon(Icons.Default.Menu, null, tint = TextSecondary) } },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = BgSecondary)
         )
 
-        // Terminal output
+        // ── Terminal output ───────────────────────────────────────────────────
         LazyColumn(
             state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth().background(Color(0xFF0D1117)).padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(Color(0xFF0A0E13))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            items(lines) { line ->
+            itemsIndexed(lines) { _, line ->
                 Text(
-                    text = line,
+                    text = line.text,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
-                    color = if (line.startsWith("$")) AccentGreen else TextPrimary,
-                    lineHeight = 18.sp
+                    lineHeight = 17.sp,
+                    color = when (line.kind) {
+                        CommandProcessor.LineKind.PROMPT  -> AccentGreen
+                        CommandProcessor.LineKind.HEADER  -> AccentBlue
+                        CommandProcessor.LineKind.ERROR   -> AccentRed
+                        CommandProcessor.LineKind.MUTED   -> TextMuted
+                        CommandProcessor.LineKind.SUCCESS  -> AccentGreen
+                        else -> TextPrimary
+                    }
                 )
             }
         }
 
-        // Quick commands
+        HorizontalDivider(color = BorderDefault, thickness = 1.dp)
+
+        // ── Quick commands bar ────────────────────────────────────────────────
         LazyRow(
-            modifier = Modifier.fillMaxWidth().background(BgSecondary).padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth().background(BgSecondary).padding(horizontal = 8.dp, vertical = 5.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(quickCommands) { cmd ->
+            items(QUICK_CMDS) { cmd ->
                 Text(
                     text = cmd,
                     fontSize = 11.sp,
@@ -105,42 +165,56 @@ fun SshScreen(onOpenDrawer: () -> Unit) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
                         .background(BgTertiary)
+                        .clickable { input = cmd; submit() }
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
         }
 
-        // Input bar
+        // ── Input bar ─────────────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(BgSecondary)
                 .imePadding()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("$ ", fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = AccentGreen)
+            Text(
+                promptStr(hostname, cwd) + " ",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = AccentGreen
+            )
+            Spacer(Modifier.width(4.dp))
             BasicTextField(
                 value = input,
-                onValueChange = { input = it },
-                textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp, fontFamily = FontFamily.Monospace),
+                onValueChange = { input = it; histIdx = -1 },
+                textStyle = TextStyle(color = TextPrimary, fontSize = 13.sp, fontFamily = FontFamily.Monospace),
                 singleLine = true,
                 modifier = Modifier.weight(1f),
                 decorationBox = { inner ->
-                    if (input.isEmpty()) Text("type a command…", fontSize = 14.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                    if (input.isEmpty()) Text("type a command…", fontSize = 13.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
                     inner()
                 }
             )
-            IconButton(onClick = {
-                if (input.isNotBlank()) {
-                    lines += "$ $input"
-                    lines += "[SSH not connected — configure agent SSH support]"
-                    lines += ""
-                    input = ""
+            Spacer(Modifier.width(4.dp))
+            // history ↑
+            Text("↑", fontSize = 16.sp, color = if (history.isNotEmpty()) TextSecondary else TextMuted, modifier = Modifier.clickable {
+                if (history.isNotEmpty()) {
+                    histIdx = (histIdx + 1).coerceAtMost(history.size - 1)
+                    input = history[histIdx]
                 }
-            }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.AutoMirrored.Filled.Send, null, tint = if (input.isNotBlank()) AccentGreen else TextMuted)
+            })
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick = ::submit, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.AutoMirrored.Filled.Send, null, tint = if (input.isNotBlank()) AccentBlue else TextMuted)
             }
         }
     }
+}
+
+private fun promptStr(hostname: String, cwd: String): String {
+    val shortCwd = if (cwd == "/root") "~" else cwd.substringAfterLast("/").ifEmpty { "/" }
+    return "root@$hostname:$shortCwd#"
 }

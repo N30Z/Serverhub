@@ -195,9 +195,25 @@ fun AppNavigation(viewModel: MainViewModel) {
                     onOpenDrawer = { scope.launch { drawerState.open() } }
                 )
             }
-            composable(Routes.SSH)      { SshScreen(onOpenDrawer = { scope.launch { drawerState.open() } }) }
-            composable(Routes.FILES)    { FilesScreen(onOpenDrawer = { scope.launch { drawerState.open() } }) }
-            composable(Routes.CRON)     { CronScreen(onOpenDrawer = { scope.launch { drawerState.open() } }) }
+            composable(Routes.SSH) {
+                SshScreen(
+                    metrics = metrics,
+                    onOpenDrawer = { scope.launch { drawerState.open() } }
+                )
+            }
+            composable(Routes.FILES) {
+                FilesScreen(onOpenDrawer = { scope.launch { drawerState.open() } })
+            }
+            composable(Routes.CRON) {
+                val cronJobs by viewModel.cronJobs.collectAsState()
+                CronScreen(
+                    jobs     = cronJobs,
+                    onAdd    = { viewModel.addCronJob(it) },
+                    onUpdate = { viewModel.updateCronJob(it) },
+                    onDelete = { viewModel.deleteCronJob(it) },
+                    onOpenDrawer = { scope.launch { drawerState.open() } }
+                )
+            }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     savedUrl = viewModel.savedUrl,

@@ -7,12 +7,14 @@ import androidx.lifecycle.viewModelScope
 import com.serverhub.android.data.api.ConnectionState
 import com.serverhub.android.data.api.ServerHubApi
 import com.serverhub.android.data.model.Alert
+import com.serverhub.android.data.model.CronJob
 import com.serverhub.android.data.model.SystemMetrics
 import com.serverhub.android.data.model.generateAlerts
 import com.serverhub.android.data.repository.MetricsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 sealed class UiState {
@@ -41,6 +43,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _alerts = MutableStateFlow<List<Alert>>(emptyList())
     val alerts: StateFlow<List<Alert>> = _alerts
 
+    private val _cronJobs = MutableStateFlow<List<CronJob>>(emptyList())
+    val cronJobs: StateFlow<List<CronJob>> = _cronJobs
+
     val savedUrl: String get() = prefs.getString("server_url", "") ?: ""
     val savedUsername: String get() = prefs.getString("username", "") ?: ""
 
@@ -59,6 +64,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _connectionState.value = state
             }
         }
+
+        _cronJobs.value = loadCronJobs()
 
         val token = prefs.getString("token", null)
         val url = savedUrl
@@ -98,6 +105,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _alerts.value = emptyList()
         _connectionState.value = ConnectionState.Disconnected
         _uiState.value = UiState.Login
+    }
+
+    fun addCronJob(job: CronJob) {
+        val updated = _cronJobs.value + job
+        _cronJobs.value = updated
+        saveCronJobs(updated)
+    }
+
+    fun updateCronJob(job: CronJob) {
+        val updated = _cronJobs.value.map { if (it.id == job.id) job else it }
+        _cronJobs.value = updated
+        saveCronJobs(updated)
+    }
+
+    fun deleteCronJob(id: String) {
+        val updated = _cronJobs.value.filter { it.id != id }
+        _cronJobs.value = updated
+        saveCronJobs(updated)
+    }
+
+    private fun saveCronJobs(jobs: List<CronJob>) {
+        prefs.edit().putString("cron_jobs", jsonParser.encodeToString(jobs)).apply()
+    }
+
+    private fun loadCronJobs(): List<CronJob> {
+        val raw = prefs.getString("cron_jobs", null) ?: return emptyList()
+        return try { jsonParser.decodeFromString(raw) } catch (_: Exception) { emptyList() }
     }
 
     override fun onCleared() {
