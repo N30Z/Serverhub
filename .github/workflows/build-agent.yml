@@ -1,0 +1,124 @@
+name: Build Agent
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+    paths:
+      - "serverhub-agent/**"
+      - "serverhub-ui/**"
+      - ".github/workflows/build-agent.yml"
+  pull_request:
+    paths:
+      - "serverhub-agent/**"
+      - "serverhub-ui/**"
+  release:
+    types: [created]
+
+jobs:
+  build:
+    name: Build & Package
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Frontend ─────────────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: serverhub-ui/package-lock.json
+
+      - name: Build frontend
+        working-directory: serverhub-ui
+        run: |
+          npm ci
+          npm run build
+
+      # ── Go agent ─────────────────────────────────────────────────────────────
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: serverhub-agent/go.sum
+
+      - name: Embed frontend into agent
+        run: |
+          rm -rf serverhub-agent/web/*
+          cp -r serverhub-ui/dist/. serverhub-agent/web/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            echo "version=0.0.0-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build agent binary (linux/amd64)
+        working-directory: serverhub-agent
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build \
+              -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" \
+              -o serverhub-agent \
+              .
+
+      # ── .deb packaging ────────────────────────────────────────────────────────
+      - name: Install dpkg-deb
+        run: sudo apt-get install -y dpkg
+
+      - name: Package .deb
+        working-directory: serverhub-agent
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          PKG="serverhub-agent_${VERSION}_amd64"
+          mkdir -p "${PKG}/DEBIAN" \
+                   "${PKG}/usr/bin" \
+                   "${PKG}/lib/systemd/system" \
+                   "${PKG}/etc/serverhub"
+
+          cp serverhub-agent                             "${PKG}/usr/bin/"
+          cp packaging/systemd/serverhub-agent.service  "${PKG}/lib/systemd/system/"
+          cp packaging/config.yaml.example               "${PKG}/etc/serverhub/config.yaml"
+
+          sed "s/VERSION_PLACEHOLDER/${VERSION}/" \
+              packaging/debian/control > "${PKG}/DEBIAN/control"
+          cp packaging/debian/conffiles  "${PKG}/DEBIAN/conffiles"
+          cp packaging/debian/postinst   "${PKG}/DEBIAN/postinst"
+          cp packaging/debian/prerm      "${PKG}/DEBIAN/prerm"
+          chmod 755 "${PKG}/DEBIAN/postinst" "${PKG}/DEBIAN/prerm"
+
+          dpkg-deb --build --root-owner-group "${PKG}"
+          echo "DEB=${PKG}.deb" >> "$GITHUB_ENV"
+          echo "Built: ${PKG}.deb ($(du -sh "${PKG}.deb" | cut -f1))"
+
+      # ── Artefacts ─────────────────────────────────────────────────────────────
+      - name: Upload .deb artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: serverhub-agent-deb
+          path: serverhub-agent/*.deb
+          retention-days: 30
+
+      - name: Upload binary artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: serverhub-agent-binary
+          path: serverhub-agent/serverhub-agent
+          retention-days: 30
+
+      # ── GitHub Release upload (tags only) ─────────────────────────────────────
+      - name: Attach to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: serverhub-agent/*.deb

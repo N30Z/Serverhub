@@ -1,0 +1,34 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+  tls: true
+  cert_path: /etc/serverhub/cert.pem
+  key_path: /etc/serverhub/key.pem
+
+monitoring:
+  interval: 5
+  retention_days: 30
+  docker_enabled: true
+  temperature_enabled: true
+  process_count: 50
+
+notifications:
+  email_enabled: true
+  email_smtp_host: smtp.example.com
+  email_smtp_port: 587
+  email_smtp_user: ""
+  email_smtp_pass: ""
+  email_from: serverhub@example.com
+  email_to:
+    - admin@example.com
+  push_enabled: true
+
+auth:
+  session_timeout: 3600
+  max_sessions: 5
+  two_factor: false
+
+future:
+  central_management: false
+  central_server_url: ""
+  central_server_token: ""

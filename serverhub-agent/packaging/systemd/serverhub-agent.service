@@ -1,0 +1,22 @@
+[Unit]
+Description=ServerHub Agent — Linux server monitoring & management
+Documentation=https://github.com/n30z/serverhub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/serverhub-agent --config /etc/serverhub/config.yaml
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=serverhub-agent
+
+# Hardening (comment out if docker/systemctl access breaks)
+PrivateTmp=false
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

@@ -32,3 +32,9 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Web UI
+serverhub-ui/node_modules/
+serverhub-ui/dist/
+serverhub-ui/.vite/
+serverhub-agent/serverhub-agent
