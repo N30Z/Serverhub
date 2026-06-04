@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer hexagon -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M54,22 L82,38.5 L82,69.5 L54,86 L26,69.5 L26,38.5 Z"/>
+    <!-- Inner dark hexagon -->
+    <path
+        android:fillColor="#0D1117"
+        android:pathData="M54,30 L76,42.9 L76,65.1 L54,78 L32,65.1 L32,42.9 Z"/>
+    <!-- Server rack lines -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M40,46 h28 v5 h-28 z"/>
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M40,55 h28 v5 h-28 z"/>
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M40,64 h28 v5 h-28 z"/>
+    <!-- Status dots -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M63,47.5 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"/>
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M63,56.5 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"/>
+    <path
+        android:fillColor="#FF9800"
+        android:pathData="M63,65.5 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"/>
+</vector>
