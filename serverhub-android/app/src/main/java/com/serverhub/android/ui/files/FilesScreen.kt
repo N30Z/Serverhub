@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,14 +30,18 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -70,6 +75,7 @@ import java.util.Locale
 @Composable
 fun FilesScreen(
     onListFiles: suspend (String) -> Result<List<FileEntry>>,
+    onReadFile: suspend (String) -> Result<String>,
     onOpenDrawer: () -> Unit
 ) {
     var cwd     by remember { mutableStateOf("/") }
@@ -77,6 +83,7 @@ fun FilesScreen(
     var entries by remember { mutableStateOf<List<FileEntry>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var error   by remember { mutableStateOf<String?>(null) }
+    var preview by remember { mutableStateOf<FilePreview?>(null) }
     val scope   = rememberCoroutineScope()
 
     fun load(path: String) {
@@ -87,6 +94,16 @@ fun FilesScreen(
                 onFailure = { error = it.message }
             )
             loading = false
+        }
+    }
+
+    fun openFile(entry: FileEntry) {
+        preview = FilePreview(entry.name, null, true)
+        scope.launch {
+            onReadFile(entry.path).fold(
+                onSuccess = { preview = FilePreview(entry.name, it, false) },
+                onFailure = { preview = FilePreview(entry.name, "Could not read file: ${it.message}", false) }
+            )
         }
     }
 
@@ -162,7 +179,7 @@ fun FilesScreen(
             }
             else -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 12.dp)) {
                 items(visible, key = { it.path }) { entry ->
-                    FileRow(entry, onClick = { if (entry.isDir) load(entry.path) })
+                    FileRow(entry, onClick = { if (entry.isDir) load(entry.path) else openFile(entry) })
                     HorizontalDivider(color = BorderDefault, thickness = 0.5.dp)
                 }
                 if (visible.isEmpty()) {
@@ -174,6 +191,49 @@ fun FilesScreen(
                     }
                 }
             }
+        }
+    }
+
+    preview?.let { p ->
+        FilePreviewSheet(p, onDismiss = { preview = null })
+    }
+}
+
+private data class FilePreview(val name: String, val content: String?, val loading: Boolean)
+
+@Composable
+private fun FilePreviewSheet(preview: FilePreview, onDismiss: () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = BgSecondary
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(preview.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, fontFamily = FontFamily.Monospace, maxLines = 1)
+            Spacer(Modifier.size(12.dp))
+            when {
+                preview.loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = AccentBlue)
+                }
+                else -> Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(BgTertiary)
+                        .verticalScroll(rememberScrollState())
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        preview.content?.ifEmpty { "(empty file)" } ?: "(empty file)",
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+            Spacer(Modifier.size(32.dp))
         }
     }
 }

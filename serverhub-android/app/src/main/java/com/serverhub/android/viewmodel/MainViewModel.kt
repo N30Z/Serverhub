@@ -121,6 +121,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun listFiles(path: String): Result<List<FileEntry>> =
         api?.listFiles(path) ?: Result.failure(Exception("Not connected"))
 
+    suspend fun readFile(path: String): Result<String> =
+        api?.readFile(path) ?: Result.failure(Exception("Not connected"))
+
     // ── Exec ──────────────────────────────────────────────────────────────────
 
     suspend fun exec(command: String): Result<ExecResult> =

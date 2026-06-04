@@ -205,6 +205,7 @@ fun AppNavigation(viewModel: MainViewModel) {
             composable(Routes.FILES) {
                 FilesScreen(
                     onListFiles = { path -> viewModel.listFiles(path) },
+                    onReadFile = { path -> viewModel.readFile(path) },
                     onOpenDrawer = { scope.launch { drawerState.open() } }
                 )
             }
