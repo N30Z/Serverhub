@@ -1,10 +1,14 @@
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useStore } from '../../../store/useStore';
-import { WidgetBase } from './WidgetBase';
+import { WidgetBase, GaugeBar } from './WidgetBase';
 
-interface Props { onOpenDetail: () => void; isEditing: boolean; }
+interface Props {
+  onOpenDetail: () => void;
+  isEditing: boolean;
+  variant?: 'chart' | 'number';
+}
 
-export function LoadWidget({ onOpenDetail, isEditing }: Props) {
+export function LoadWidget({ onOpenDetail, isEditing, variant = 'chart' }: Props) {
   const metrics = useStore((s) => s.metrics);
   if (!metrics) return null;
   const { load, cpu } = metrics;
@@ -18,15 +22,45 @@ export function LoadWidget({ onOpenDetail, isEditing }: Props) {
     return 'var(--accent-green)';
   };
 
+  const loadItems = [
+    { label: '1m', val: load.load1 },
+    { label: '5m', val: load.load5 },
+    { label: '15m', val: load.load15 },
+  ];
+
+  if (variant === 'number') {
+    return (
+      <div className="group h-full" onClick={!isEditing ? onOpenDetail : undefined}>
+        <WidgetBase title="Load Average">
+          <div className="flex flex-col justify-between h-full pb-1">
+            <div className="flex items-end justify-between gap-2">
+              {loadItems.map(({ label, val }) => (
+                <div key={label} className="flex-1 text-center">
+                  <div className="font-bold font-mono leading-none" style={{ fontSize: 22, color: getColor(val), fontFamily: 'var(--mono)' }}>
+                    {val.toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-muted)] mt-1">{label}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 space-y-1">
+              <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+                <span>{cpuCount} cores</span>
+                <span>{((load.load1 / cpuCount) * 100).toFixed(0)}% utilized</span>
+              </div>
+              <GaugeBar value={(load.load1 / cpuCount) * 100} color={getColor(load.load1)} />
+            </div>
+          </div>
+        </WidgetBase>
+      </div>
+    );
+  }
+
   return (
     <div className="group h-full" onClick={!isEditing ? onOpenDetail : undefined}>
       <WidgetBase title="Load Average">
         <div className="flex items-center gap-4 mb-3">
-          {[
-            { label: '1m', val: load.load1 },
-            { label: '5m', val: load.load5 },
-            { label: '15m', val: load.load15 },
-          ].map(({ label, val }) => (
+          {loadItems.map(({ label, val }) => (
             <div key={label} className="text-center">
               <div className="text-xl font-bold font-mono" style={{ color: getColor(val) }}>
                 {val.toFixed(2)}

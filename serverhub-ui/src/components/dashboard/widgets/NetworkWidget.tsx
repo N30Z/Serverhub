@@ -1,11 +1,15 @@
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 import { useStore } from '../../../store/useStore';
-import { WidgetBase } from './WidgetBase';
+import { WidgetBase, formatBytes } from './WidgetBase';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 
-interface Props { onOpenDetail: () => void; isEditing: boolean; }
+interface Props {
+  onOpenDetail: () => void;
+  isEditing: boolean;
+  variant?: 'chart' | 'number';
+}
 
-export function NetworkWidget({ onOpenDetail, isEditing }: Props) {
+export function NetworkWidget({ onOpenDetail, isEditing, variant = 'chart' }: Props) {
   const metrics = useStore((s) => s.metrics);
   if (!metrics) return null;
   const { network } = metrics;
@@ -13,6 +17,52 @@ export function NetworkWidget({ onOpenDetail, isEditing }: Props) {
 
   const rxRate = primary?.rxRate ?? 0;
   const txRate = primary?.txRate ?? 0;
+
+  if (variant === 'number') {
+    const rxTotal = formatBytes(primary?.rx ?? 0);
+    const txTotal = formatBytes(primary?.tx ?? 0);
+    return (
+      <div className="group h-full" onClick={!isEditing ? onOpenDetail : undefined}>
+        <WidgetBase title="Network">
+          <div className="flex flex-col justify-between h-full pb-1">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <ArrowDown size={13} className="text-[var(--accent-blue)]" />
+                  <span className="text-[10px] text-[var(--text-muted)]">RX</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-bold font-mono" style={{ fontSize: 20, color: 'var(--accent-blue)', fontFamily: 'var(--mono)' }}>{rxRate.toFixed(1)}</span>
+                  <span className="text-[10px] text-[var(--text-muted)] ml-1">MB/s</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <ArrowUp size={13} className="text-[var(--accent-purple)]" />
+                  <span className="text-[10px] text-[var(--text-muted)]">TX</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-bold font-mono" style={{ fontSize: 20, color: 'var(--accent-purple)', fontFamily: 'var(--mono)' }}>{txRate.toFixed(1)}</span>
+                  <span className="text-[10px] text-[var(--text-muted)] ml-1">MB/s</span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-2 text-[10px] space-y-0.5">
+              <div className="flex justify-between text-[var(--text-muted)]">
+                <span>{primary?.name} · {primary?.ip}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-muted)]">Total ↓</span><span className="font-mono text-[var(--text-secondary)]">{rxTotal}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-muted)]">Total ↑</span><span className="font-mono text-[var(--text-secondary)]">{txTotal}</span>
+              </div>
+            </div>
+          </div>
+        </WidgetBase>
+      </div>
+    );
+  }
 
   return (
     <div className="group h-full" onClick={!isEditing ? onOpenDetail : undefined}>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, X, Maximize2, ChevronDown, Terminal, Wifi, WifiOff, Keyboard } from 'lucide-react';
+import { Plus, X, Maximize2, Wifi, WifiOff, Send, Terminal } from 'lucide-react';
 
 interface Tab {
   id: string;
@@ -81,34 +81,34 @@ const DEMO_RESPONSES: Record<string, TermLine[]> = {
   'systemctl status nginx': [
     { type: 'output', text: '● nginx.service - A high performance web server and a reverse proxy server' },
     { type: 'output', text: '     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; preset: enabled)' },
-    { type: 'output', text: '     Active: \x1b[32mactive (running)\x1b[0m since Mon 2025-06-01 10:00:00 UTC; 2 days ago' },
-    { type: 'output', text: '    Process: 2380 ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)' },
+    { type: 'output', text: '     Active: active (running) since Mon 2025-06-01 10:00:00 UTC; 2 days ago' },
     { type: 'output', text: '   Main PID: 2381 (nginx)' },
     { type: 'output', text: '      Tasks: 9 (limit: 38467)' },
     { type: 'output', text: '     Memory: 12.4M' },
   ],
 };
 
-function createTab(id: string): Tab {
+const QUICK_KEYS = ['ls', 'ls -la', 'cd ~', 'sudo su', 'df -h', 'free -h', 'top', 'ps aux', '|', '~', '/', 'Tab'];
+
+function createTab(id: string, title = 'prod-server-01', host = '192.168.1.100', connected = true): Tab {
+  if (!connected) {
+    return {
+      id, title, host, user: 'admin', connected: false,
+      currentInput: '', inputHistory: [], histIdx: -1,
+      history: [
+        { type: 'system', text: `⚠ Connection to ${title} (${host}:22) closed` },
+        { type: 'system', text: 'Press Enter or type a command to reconnect' },
+      ],
+    };
+  }
   return {
-    id,
-    title: 'prod-server-01',
-    host: '192.168.1.100',
-    user: 'admin',
-    connected: true,
-    currentInput: '',
-    inputHistory: [],
-    histIdx: -1,
+    id, title, host, user: 'admin', connected: true,
+    currentInput: '', inputHistory: [], histIdx: -1,
     history: [
-      { type: 'system', text: '⚡ Connected to prod-server-01 (192.168.1.100:22) as admin' },
+      { type: 'system', text: `⚡ Connected to ${title} (${host}:22) as admin` },
       { type: 'system', text: 'ServerHub SSH Client v1.0 — Type commands below' },
       { type: 'output', text: '' },
-      { type: 'output', text: 'Welcome to Ubuntu 24.04.1 LTS (GNU/Linux 6.8.0-51-generic x86_64)' },
-      { type: 'output', text: '' },
-      { type: 'output', text: ' * Documentation:  https://help.ubuntu.com' },
-      { type: 'output', text: ' * Management:     https://landscape.canonical.com' },
-      { type: 'output', text: '' },
-      { type: 'output', text: '  System information as of Tue Jun  3 14:30:01 UTC 2025' },
+      { type: 'output', text: `Welcome to Ubuntu 24.04.1 LTS (GNU/Linux 6.8.0-51-generic x86_64)` },
       { type: 'output', text: '' },
       { type: 'output', text: '  System load:  1.82               Users logged in:          3' },
       { type: 'output', text: '  Usage of /:   44.2% of 490.0GB  Memory usage:             56%' },
@@ -118,10 +118,15 @@ function createTab(id: string): Tab {
   };
 }
 
+const INITIAL_TABS: Tab[] = [
+  createTab('1', 'prod-server-01', '192.168.1.100', true),
+  createTab('2', 'db-replica-02', '192.168.1.101', false),
+];
+
 export default function SSHTerminal() {
-  const [tabs, setTabs] = useState<Tab[]>([createTab('1')]);
+  const [tabs, setTabs] = useState<Tab[]>(INITIAL_TABS);
   const [activeTab, setActiveTab] = useState('1');
-  const [tabCounter, setTabCounter] = useState(2);
+  const [tabCounter, setTabCounter] = useState(3);
   const termEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -139,26 +144,29 @@ export default function SSHTerminal() {
     setTabs((prev) => prev.map((t) => t.id === id ? updater(t) : t));
   };
 
-  const handleInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const submitCommand = (cmd: string) => {
+    const tab = currentTab;
+    const promptLine: TermLine = {
+      type: 'prompt',
+      text: cmd,
+      prompt: `admin@${tab.host.split('.').pop()}:~$`,
+    };
+    const responseLines = DEMO_RESPONSES[cmd]
+      ?? (cmd === '' ? [] : [{ type: 'output' as const, text: `bash: ${cmd}: command not found` }]);
+
+    updateTab(tab.id, (t) => ({
+      ...t,
+      history: [...t.history, promptLine, ...responseLines],
+      inputHistory: cmd ? [cmd, ...t.inputHistory.slice(0, 49)] : t.inputHistory,
+      currentInput: '',
+      histIdx: -1,
+    }));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const tab = currentTab;
     if (e.key === 'Enter') {
-      const cmd = tab.currentInput.trim();
-      const promptLine: TermLine = {
-        type: 'prompt',
-        text: cmd,
-        prompt: `admin@${tab.host.split('.').pop()}:~$`,
-      };
-
-      const responseLines = DEMO_RESPONSES[cmd]
-        ?? (cmd === '' ? [] : [{ type: 'output' as const, text: `bash: ${cmd}: command not found` }]);
-
-      updateTab(tab.id, (t) => ({
-        ...t,
-        history: [...t.history, promptLine, ...responseLines],
-        inputHistory: cmd ? [cmd, ...t.inputHistory.slice(0, 49)] : t.inputHistory,
-        currentInput: '',
-        histIdx: -1,
-      }));
+      submitCommand(tab.currentInput.trim());
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       updateTab(tab.id, (t) => {
@@ -192,12 +200,13 @@ export default function SSHTerminal() {
     if (activeTab === id) setActiveTab(newTabs[newTabs.length - 1].id);
   };
 
-  const SHORTCUTS = [
-    { key: 'Ctrl+C', desc: 'Interrupt' },
-    { key: 'Ctrl+L', desc: 'Clear' },
-    { key: 'Ctrl+D', desc: 'Exit' },
-    { key: '↑↓', desc: 'History' },
-  ];
+  const injectQuickKey = (key: string) => {
+    updateTab(currentTab.id, (t) => ({
+      ...t,
+      currentInput: t.currentInput + key + (key === 'Tab' ? '\t' : ' ').trimEnd(),
+    }));
+    inputRef.current?.focus();
+  };
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-primary)]">
@@ -213,9 +222,12 @@ export default function SSHTerminal() {
             }`}
             onClick={() => setActiveTab(tab.id)}
           >
-            <Terminal size={12} />
+            <Terminal size={12} className={tab.connected ? '' : 'opacity-40'} />
             <span>{tab.title}</span>
-            {tab.connected && <span className="status-dot status-online" style={{ width: 6, height: 6 }} />}
+            {tab.connected
+              ? <span className="status-dot status-online" style={{ width: 6, height: 6 }} />
+              : <span className="status-dot status-offline" style={{ width: 6, height: 6 }} />
+            }
             {tabs.length > 1 && (
               <span
                 className="ml-1 opacity-50 hover:opacity-100 hover:text-[var(--accent-red)]"
@@ -233,23 +245,22 @@ export default function SSHTerminal() {
           <Plus size={14} />
         </button>
         <div className="flex-1" />
-        <div className="hidden lg:flex items-center gap-3 pb-2">
-          {SHORTCUTS.map((s) => (
-            <div key={s.key} className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
-              <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-secondary)]">{s.key}</kbd>
-              <span>{s.desc}</span>
-            </div>
-          ))}
+        <div className="hidden lg:flex items-center gap-1 pb-2 pr-1">
+          <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-secondary)]">↑↓</kbd>
+          <span className="text-[10px] text-[var(--text-muted)] mr-2">history</span>
+          <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-secondary)]">Ctrl+L</kbd>
+          <span className="text-[10px] text-[var(--text-muted)] mr-2">clear</span>
+          <Maximize2 size={11} className="text-[var(--text-muted)] hover:text-white cursor-pointer" />
         </div>
       </div>
 
       {/* Terminal output */}
       <div
-        className="flex-1 overflow-y-auto p-4 terminal-container cursor-text"
+        className="flex-1 overflow-y-auto p-4 terminal-container cursor-text min-h-0"
         onClick={() => inputRef.current?.focus()}
       >
         {currentTab.history.map((line, i) => (
-          <div key={i} className="leading-6">
+          <div key={i} className="leading-[1.55]">
             {line.type === 'prompt' ? (
               <div className="flex gap-2">
                 <span className="terminal-prompt flex-shrink-0">{line.prompt}</span>
@@ -265,37 +276,62 @@ export default function SSHTerminal() {
           </div>
         ))}
 
-        {/* Input line */}
-        <div className="flex gap-2 items-center mt-1">
-          <span className="terminal-prompt flex-shrink-0">admin@{currentTab.host.split('.').pop()}:~$</span>
+        {/* Blinking cursor line */}
+        {currentTab.connected && (
+          <div className="flex gap-2 items-center mt-0.5">
+            <span className="terminal-prompt flex-shrink-0">admin@{currentTab.host.split('.').pop()}:~$</span>
+            <span className="terminal-output opacity-40">{currentTab.currentInput}</span>
+            <span className="inline-block w-[9px] h-[15px] bg-white align-middle" style={{ animation: 'sh-blink 1.1s step-end infinite' }} />
+          </div>
+        )}
+        <div ref={termEndRef} />
+      </div>
+
+      {/* Quick-key bar */}
+      <div className="flex items-center gap-1 px-3 py-1.5 bg-[var(--bg-secondary)] border-t border-[var(--border)] overflow-x-auto flex-shrink-0">
+        {QUICK_KEYS.map((key) => (
+          <button
+            key={key}
+            className="flex-shrink-0 px-2 py-0.5 rounded text-[11px] font-mono bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-blue)] transition-colors"
+            onClick={() => injectQuickKey(key === 'Tab' ? '' : key)}
+            tabIndex={-1}
+          >
+            {key}
+          </button>
+        ))}
+      </div>
+
+      {/* Command input bar */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-secondary)] border-t border-[var(--border)] flex-shrink-0">
+        <div className="flex items-center gap-2 flex-1 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-1.5 focus-within:border-[var(--accent-blue)] transition-colors">
+          {currentTab.connected
+            ? <Wifi size={12} className="text-[var(--accent-green)] flex-shrink-0" />
+            : <WifiOff size={12} className="text-[var(--text-muted)] flex-shrink-0" />
+          }
+          <span className="terminal-prompt text-[12px] flex-shrink-0">
+            admin@{currentTab.host.split('.').pop()}:~$
+          </span>
           <input
             ref={inputRef}
-            className="flex-1 bg-transparent outline-none text-white terminal-container caret-white"
+            className="flex-1 bg-transparent outline-none text-white terminal-container text-[13px] caret-[var(--accent-blue)] min-w-0"
             value={currentTab.currentInput}
             onChange={(e) => updateTab(currentTab.id, (t) => ({ ...t, currentInput: e.target.value }))}
-            onKeyDown={handleInput}
+            onKeyDown={handleKeyDown}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
+            placeholder={currentTab.connected ? '' : 'Disconnected — press Enter to reconnect'}
           />
         </div>
-        <div ref={termEndRef} />
-      </div>
-
-      {/* Status bar */}
-      <div className="flex items-center justify-between px-4 py-1.5 bg-[var(--bg-secondary)] border-t border-[var(--border)] text-[10px] text-[var(--text-muted)] flex-shrink-0">
-        <div className="flex items-center gap-3">
-          {currentTab.connected ? <Wifi size={10} className="text-[var(--accent-green)]" /> : <WifiOff size={10} />}
-          <span>{currentTab.user}@{currentTab.host}</span>
-          <span>SSH · Port 22</span>
-          <span>UTF-8</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <Keyboard size={10} />
-          <span>bash</span>
-          <Maximize2 size={10} className="cursor-pointer hover:text-white" />
-        </div>
+        <button
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-white transition-all hover:opacity-90 active:scale-95"
+          style={{ background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))' }}
+          onClick={() => submitCommand(currentTab.currentInput.trim())}
+        >
+          <Send size={12} />
+          <span>Send</span>
+        </button>
       </div>
     </div>
   );

@@ -21,6 +21,8 @@
     --accent-orange: #db6d28;
     --gradient-blue: #1d63ed;
     --gradient-purple: #7c3aed;
+    --ui: 'Space Grotesk', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
   }
 
   * {
@@ -37,7 +39,7 @@
   body {
     background-color: var(--bg-primary);
     color: var(--text-primary);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--ui);
     font-size: 14px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;

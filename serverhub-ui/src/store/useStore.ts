@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { SystemMetrics, Alert, AlertRule, CronJob, WidgetConfig, Theme } from '../types';
 
+export type DashboardVariant = 'chart' | 'number';
+
 interface AppState {
   theme: Theme;
   activeView: string;
@@ -13,6 +15,7 @@ interface AppState {
   isAuthenticated: boolean;
   serverName: string;
   isEditingDashboard: boolean;
+  dashboardVariant: DashboardVariant;
 
   setTheme: (theme: Theme) => void;
   setActiveView: (view: string) => void;
@@ -24,6 +27,7 @@ interface AppState {
   setWidgets: (widgets: WidgetConfig[]) => void;
   setAuthenticated: (auth: boolean) => void;
   toggleEditDashboard: () => void;
+  setDashboardVariant: (v: DashboardVariant) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -38,6 +42,7 @@ export const useStore = create<AppState>((set) => ({
   isAuthenticated: false,
   serverName: 'prod-server-01',
   isEditingDashboard: false,
+  dashboardVariant: 'chart',
 
   setTheme: (theme) => set({ theme }),
   setActiveView: (activeView) => set({ activeView }),
@@ -49,6 +54,7 @@ export const useStore = create<AppState>((set) => ({
   setWidgets: (widgets) => set({ widgets }),
   setAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
   toggleEditDashboard: () => set((s) => ({ isEditingDashboard: !s.isEditingDashboard })),
+  setDashboardVariant: (dashboardVariant) => set({ dashboardVariant }),
 }));
 
 const defaultWidgets: WidgetConfig[] = [
