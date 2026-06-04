@@ -1,0 +1,13 @@
+Package: serverhub-agent
+Version: VERSION_PLACEHOLDER
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: N30Z <admin@serverhub.local>
+Depends: systemd
+Description: ServerHub Agent — Linux server monitoring & management
+ Self-contained Linux agent that collects system metrics (CPU, memory,
+ disk, network, processes, services, Docker containers) and serves the
+ ServerHub web dashboard + REST/WebSocket API on port 8080.
+ .
+ Install and visit http://<server-ip>:8080 to access the dashboard.

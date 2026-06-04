@@ -37,3 +37,4 @@ google-services.json
 serverhub-ui/node_modules/
 serverhub-ui/dist/
 serverhub-ui/.vite/
+serverhub-agent/serverhub-agent

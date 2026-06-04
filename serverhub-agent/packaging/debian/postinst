@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  configure)
+    systemctl daemon-reload
+    systemctl enable serverhub-agent.service
+    systemctl restart serverhub-agent.service
+    echo "ServerHub Agent started. Visit http://$(hostname -I | awk '{print $1}'):8080"
+    ;;
+esac

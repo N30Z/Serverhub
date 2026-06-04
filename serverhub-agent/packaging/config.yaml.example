@@ -1,0 +1,16 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  tls:
+    enabled: false
+    cert_file: "/etc/serverhub/cert.pem"
+    key_file:  "/etc/serverhub/key.pem"
+
+auth:
+  username: "admin"
+  password: "changeme"
+  session_timeout: 86400   # 24 hours in seconds
+
+monitoring:
+  interval: 3    # seconds between metric collections
+  history: 60    # data points kept for sparklines (60 × 3s = 3 min)

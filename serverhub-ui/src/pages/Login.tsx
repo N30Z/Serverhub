@@ -3,7 +3,7 @@ import { Server, Eye, EyeOff, Wifi, Shield, Lock } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export default function Login() {
-  const { setAuthenticated } = useStore();
+  const { setAuthenticated, setAuthToken } = useStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -12,17 +12,35 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
-      setError('Please enter your credentials');
-      return;
-    }
+    if (!username || !password) { setError('Please enter your credentials'); return; }
     setLoading(true);
     setError('');
-    await new Promise((r) => setTimeout(r, 800));
-    if (username === 'admin' && password === 'admin') {
-      setAuthenticated(true);
+
+    if (import.meta.env.PROD) {
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        if (res.ok) {
+          const { token } = await res.json() as { token: string };
+          setAuthToken(token);
+          setAuthenticated(true);
+        } else {
+          setError('Invalid username or password');
+        }
+      } catch {
+        setError('Could not reach agent — is it running?');
+      }
     } else {
-      setError('Invalid username or password');
+      // Dev mode: accept demo credentials
+      await new Promise((r) => setTimeout(r, 600));
+      if (username === 'admin' && password === 'admin') {
+        setAuthenticated(true);
+      } else {
+        setError('Invalid username or password');
+      }
     }
     setLoading(false);
   };

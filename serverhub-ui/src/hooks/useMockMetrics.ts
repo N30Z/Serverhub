@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import {
-  MOCK_METRICS, MOCK_ALERTS, MOCK_ALERT_RULES, MOCK_CRON_JOBS
+  MOCK_METRICS, MOCK_ALERTS, MOCK_ALERT_RULES, MOCK_CRON_JOBS,
 } from '../data/mockData';
 import type { SystemMetrics } from '../types';
+
+// ── Dev-mode mock data ────────────────────────────────────────────────────────
 
 function jitter(base: number, pct = 0.08): number {
   return base + (Math.random() - 0.5) * base * pct;
@@ -41,17 +43,55 @@ function buildLiveMetrics(): SystemMetrics {
   };
 }
 
+// ── Hook ─────────────────────────────────────────────────────────────────────
+
 export function useMockMetrics() {
-  const { setMetrics, setAlerts, setAlertRules, setCronJobs } = useStore();
+  const { setMetrics, setAlerts, setAlertRules, setCronJobs, authToken } = useStore();
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
+    // Always seed alerts/cron from mock data (real API endpoints are future work)
     setAlerts(MOCK_ALERTS);
     setAlertRules(MOCK_ALERT_RULES);
     setCronJobs(MOCK_CRON_JOBS);
 
+    // In production mode with a valid auth token, connect to the real agent WebSocket.
+    // In dev mode (Vite dev server), fall back to mock data.
+    if (import.meta.env.PROD && authToken) {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${proto}//${window.location.host}/ws?token=${authToken}`;
+
+      const connect = () => {
+        const ws = new WebSocket(url);
+        wsRef.current = ws;
+
+        ws.onmessage = (evt) => {
+          try {
+            setMetrics(JSON.parse(evt.data) as SystemMetrics);
+          } catch { /* ignore malformed frames */ }
+        };
+
+        ws.onclose = () => {
+          // Reconnect after 3 s if component is still mounted
+          setTimeout(() => {
+            if (wsRef.current?.readyState !== WebSocket.OPEN) connect();
+          }, 3000);
+        };
+
+        ws.onerror = () => ws.close();
+      };
+
+      connect();
+      return () => {
+        wsRef.current?.close();
+        wsRef.current = null;
+      };
+    }
+
+    // Dev mode: poll mock data
     const tick = () => setMetrics(buildLiveMetrics());
     tick();
-    const interval = setInterval(tick, 3000);
-    return () => clearInterval(interval);
-  }, [setMetrics, setAlerts, setAlertRules, setCronJobs]);
+    const id = setInterval(tick, 3000);
+    return () => clearInterval(id);
+  }, [authToken, setMetrics, setAlerts, setAlertRules, setCronJobs]);
 }

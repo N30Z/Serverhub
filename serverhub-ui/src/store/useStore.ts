@@ -13,6 +13,7 @@ interface AppState {
   cronJobs: CronJob[];
   widgets: WidgetConfig[];
   isAuthenticated: boolean;
+  authToken: string | null;
   serverName: string;
   isEditingDashboard: boolean;
   dashboardVariant: DashboardVariant;
@@ -26,6 +27,7 @@ interface AppState {
   setCronJobs: (jobs: CronJob[]) => void;
   setWidgets: (widgets: WidgetConfig[]) => void;
   setAuthenticated: (auth: boolean) => void;
+  setAuthToken: (token: string | null) => void;
   toggleEditDashboard: () => void;
   setDashboardVariant: (v: DashboardVariant) => void;
 }
@@ -55,6 +57,7 @@ export const useStore = create<AppState>((set) => ({
   cronJobs: [],
   widgets: defaultWidgets,
   isAuthenticated: false,
+  authToken: null,
   serverName: 'prod-server-01',
   isEditingDashboard: false,
   dashboardVariant: 'chart',
@@ -68,6 +71,7 @@ export const useStore = create<AppState>((set) => ({
   setCronJobs: (cronJobs) => set({ cronJobs }),
   setWidgets: (widgets) => set({ widgets }),
   setAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
+  setAuthToken: (authToken) => set({ authToken }),
   toggleEditDashboard: () => set((s) => ({ isEditingDashboard: !s.isEditingDashboard })),
   setDashboardVariant: (dashboardVariant) => set({ dashboardVariant }),
 }));
