@@ -4,6 +4,7 @@ package com.serverhub.android.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -124,7 +125,7 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun SettingsCard(content: @Composable Column.() -> Unit) {
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(BgCard),
         content = content
