@@ -197,8 +197,7 @@ fun AppNavigation(viewModel: MainViewModel) {
             }
             composable(Routes.SSH) {
                 SshScreen(
-                    metrics = metrics,
-                    onExec = { cmd -> viewModel.exec(cmd) },
+                    terminalUrl = viewModel.terminalUrl,
                     onOpenDrawer = { scope.launch { drawerState.open() } }
                 )
             }

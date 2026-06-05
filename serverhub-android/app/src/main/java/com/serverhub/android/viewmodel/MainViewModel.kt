@@ -53,6 +53,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val savedUrl: String get() = prefs.getString("server_url", "") ?: ""
     val savedUsername: String get() = prefs.getString("username", "") ?: ""
 
+    val terminalUrl: String
+        get() {
+            val token = prefs.getString("token", "") ?: return ""
+            if (savedUrl.isEmpty() || token.isEmpty()) return ""
+            return "$savedUrl/terminal?token=$token"
+        }
+
     init {
         viewModelScope.launch {
             repository.messages.collect { msg ->
