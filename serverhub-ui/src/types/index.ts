@@ -257,4 +257,7 @@ export type WidgetType =
   | 'services'
   | 'uptime'
   | 'users'
+  | 'bandwidth'
+  | 'logs'
+  | 'firewall'
   | 'custom';

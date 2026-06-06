@@ -330,12 +330,42 @@
 .animate-fade-in { animation: fade-in 0.3s ease; }
 
 /* React Grid Layout overrides */
-.react-grid-item.react-grid-placeholder {
-  background: rgba(88, 166, 255, 0.1) !important;
-  border: 2px dashed rgba(88, 166, 255, 0.4) !important;
-  border-radius: 12px !important;
+.react-grid-item {
+  transition: none !important; /* disable default transition; we handle it ourselves */
 }
 
-.react-resizable-handle::after {
-  border-color: var(--accent-blue) !important;
+.react-grid-item.react-grid-placeholder {
+  background: rgba(88, 166, 255, 0.08) !important;
+  border: 2px dashed rgba(88, 166, 255, 0.45) !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+/* Resize handle only visible when the grid is in editing mode */
+.react-resizable-handle {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.rgl-editing .react-resizable-handle {
+  opacity: 1;
+}
+.react-resizable-handle-se {
+  width: 20px;
+  height: 20px;
+  bottom: 4px;
+  right: 4px;
+  background: none;
+  border: none;
+  cursor: se-resize;
+}
+.react-resizable-handle-se::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid rgba(88, 166, 255, 0.7);
+  border-bottom: 2px solid rgba(88, 166, 255, 0.7);
+  border-radius: 1px;
 }

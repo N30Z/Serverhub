@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import GridLayout, { useContainerWidth, verticalCompactor } from 'react-grid-layout';
+import type { LayoutItem } from 'react-grid-layout';
+import { GripVertical, Wifi, Terminal, Shield } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { WidgetDetailModal } from './WidgetDetailModal';
 import { CpuWidget } from './widgets/CpuWidget';
@@ -13,33 +16,141 @@ import { ServicesWidget } from './widgets/ServicesWidget';
 import { DockerWidget } from './widgets/DockerWidget';
 import { FilesystemsWidget } from './widgets/FilesystemsWidget';
 import { UsersWidget } from './widgets/UsersWidget';
-import type { WidgetType } from '../../types';
+import type { WidgetType, WidgetConfig } from '../../types';
 
-interface WCardProps {
-  children: React.ReactNode;
-  span?: number;
-  rowSpan?: number;
-  onClick?: () => void;
-  editing?: boolean;
-}
+// ── Coming Soon widget ───────────────────────────────────────────────────────
 
-function WCard({ children, span = 3, rowSpan = 1, onClick, editing }: WCardProps) {
+const COMING_SOON: Partial<Record<WidgetType, { icon: React.ReactNode; desc: string; color: string }>> = {
+  bandwidth: {
+    icon: <Wifi size={22} />,
+    desc: 'Historical bandwidth graphs with per-interface breakdown and traffic shaping',
+    color: 'var(--accent-cyan)',
+  },
+  logs: {
+    icon: <Terminal size={22} />,
+    desc: 'Real-time system log streaming with search, grep, and severity filters',
+    color: 'var(--accent-purple)',
+  },
+  firewall: {
+    icon: <Shield size={22} />,
+    desc: 'iptables / nftables rule viewer with live hit counters and traffic stats',
+    color: 'var(--accent-green)',
+  },
+};
+
+function ComingSoonWidget({ type, title }: { type: WidgetType; title: string }) {
+  const cfg = COMING_SOON[type];
+  const color = cfg?.color ?? 'var(--accent-blue)';
+  const icon = cfg?.icon ?? <Wifi size={22} />;
+  const desc = cfg?.desc ?? 'This widget is under development.';
+
   return (
-    <div
-      className={`card card-hover group overflow-hidden ${editing ? 'ring-2 ring-[var(--accent-blue)] ring-opacity-40' : ''}`}
-      style={{ gridColumn: `span ${span}`, gridRow: `span ${rowSpan}` }}
-      onClick={!editing ? onClick : undefined}
-    >
-      {children}
+    <div className="h-full flex flex-col items-center justify-center gap-3 px-5 text-center select-none">
+      <div
+        className="w-12 h-12 rounded-2xl flex items-center justify-center"
+        style={{ background: `color-mix(in srgb, ${color} 15%, transparent)`, color }}
+      >
+        {icon}
+      </div>
+      <div>
+        <div className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{title}</div>
+        <div className="text-[11px] mt-1" style={{ color: 'var(--text-muted)', lineHeight: '1.5' }}>{desc}</div>
+      </div>
+      <span
+        className="text-[9px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full"
+        style={{
+          background: 'rgba(88,166,255,0.12)',
+          color: 'var(--accent-blue)',
+          border: '1px solid rgba(88,166,255,0.25)',
+        }}
+      >
+        Coming Soon
+      </span>
     </div>
   );
 }
 
+// ── Swap + Memory Map mini-widget ─────────────────────────────────────────────
+
+function SwapMemMapWidget({ onOpenDetail, isEditing }: { onOpenDetail: () => void; isEditing: boolean }) {
+  const metrics = useStore((s) => s.metrics);
+  if (!metrics) return null;
+  const { memory, swap } = metrics;
+
+  const segments = [
+    { label: 'Used', value: memory.used, color: 'var(--accent-red)', pct: memory.usage },
+    { label: 'Cached', value: memory.cached, color: 'var(--accent-blue)', pct: (memory.cached / memory.total) * 100 },
+    { label: 'Buffers', value: memory.buffers, color: 'var(--accent-purple)', pct: (memory.buffers / memory.total) * 100 },
+    { label: 'Free', value: memory.free, color: 'var(--bg-hover)', pct: (memory.free / memory.total) * 100 },
+  ];
+
+  function fmt(mb: number) {
+    return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
+  }
+
+  return (
+    <div className="group h-full" onClick={!isEditing ? onOpenDetail : undefined}>
+      <div className="flex flex-col h-full px-3 pt-3 pb-3">
+        <div className="metric-label mb-2">Memory Map</div>
+        <div className="h-4 rounded-full overflow-hidden flex mb-3" style={{ background: 'var(--bg-hover)' }}>
+          {segments.filter((s) => s.label !== 'Free').map((seg) => (
+            <div
+              key={seg.label}
+              style={{ width: `${seg.pct}%`, background: seg.color, transition: 'width 0.5s ease' }}
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] mb-3">
+          {segments.map((seg) => (
+            <div key={seg.label} className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: seg.color }} />
+              <span className="text-[var(--text-muted)]">{seg.label}</span>
+              <span className="text-[var(--text-secondary)] font-mono ml-auto">{fmt(seg.value)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="pt-2 border-t border-[var(--border-subtle)]">
+          <div className="flex items-center justify-between text-[11px] mb-1">
+            <span className="text-[var(--text-muted)]">Swap</span>
+            <span className="font-mono text-[var(--text-secondary)]">{fmt(swap.used)} / {fmt(swap.total)}</span>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${swap.usage}%`, background: 'var(--accent-cyan)' }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
-  const { metrics, isEditingDashboard, dashboardVariant } = useStore();
+  const { metrics, isEditingDashboard, dashboardVariant, widgets, setWidgets } = useStore();
   const [detailWidget, setDetailWidget] = useState<WidgetType | null>(null);
-  const open = (type: WidgetType) => () => setDetailWidget(type);
-  const edit = isEditingDashboard;
+  const { width, containerRef } = useContainerWidth();
+
+  const layoutItems: LayoutItem[] = widgets.map((w) => ({
+    i: w.id,
+    x: w.x,
+    y: w.y,
+    w: w.w,
+    h: w.h,
+    minW: w.minW,
+    minH: w.minH,
+  }));
+
+  const persistLayout = useCallback(
+    (newLayout: readonly LayoutItem[]) => {
+      setWidgets(
+        widgets.map((w) => {
+          const item = newLayout.find((l) => l.i === w.id);
+          return item ? { ...w, x: item.x, y: item.y, w: item.w, h: item.h } : w;
+        }),
+      );
+    },
+    [widgets, setWidgets],
+  );
 
   if (!metrics) {
     return (
@@ -56,131 +167,94 @@ export default function Dashboard() {
 
   const isChart = dashboardVariant === 'chart';
 
-  return (
-    <div className="h-full overflow-y-auto p-4">
-      <div
-        className="grid gap-3"
-        style={{
-          gridTemplateColumns: 'repeat(12, 1fr)',
-          gridAutoRows: '88px',
-        }}
-      >
-        {/* ── Row A: quick-glance KPIs (3 cols each) ── */}
-        <WCard span={3} rowSpan={2} onClick={open('cpu')} editing={edit}>
-          <CpuWidget onOpenDetail={open('cpu')} isEditing={edit} variant={isChart ? 'chart' : 'number'} />
-        </WCard>
-        <WCard span={3} rowSpan={2} onClick={open('memory')} editing={edit}>
-          <MemoryWidget onOpenDetail={open('memory')} isEditing={edit} variant={isChart ? 'chart' : 'number'} />
-        </WCard>
-        <WCard span={3} rowSpan={2} onClick={open('network')} editing={edit}>
-          <NetworkWidget onOpenDetail={open('network')} isEditing={edit} variant={isChart ? 'chart' : 'number'} />
-        </WCard>
-        <WCard span={3} rowSpan={2} onClick={open('uptime')} editing={edit}>
-          <UptimeWidget onOpenDetail={open('uptime')} isEditing={edit} />
-        </WCard>
-
-        {/* ── Row B: secondary metrics (3 cols each) ── */}
-        <WCard span={3} rowSpan={3} onClick={open('load')} editing={edit}>
-          <LoadWidget onOpenDetail={open('load')} isEditing={edit} variant={isChart ? 'chart' : 'number'} />
-        </WCard>
-        <WCard span={3} rowSpan={3} onClick={open('temperature')} editing={edit}>
-          <TempWidget onOpenDetail={open('temperature')} isEditing={edit} />
-        </WCard>
-        <WCard span={3} rowSpan={3} onClick={open('disk')} editing={edit}>
-          <DiskWidget onOpenDetail={open('disk')} isEditing={edit} />
-        </WCard>
-        <WCard span={3} rowSpan={3} onClick={open('filesystems')} editing={edit}>
-          <FilesystemsWidget onOpenDetail={open('filesystems')} isEditing={edit} />
-        </WCard>
-
-        {/* ── Row C: detail tables ── */}
-        <WCard span={5} rowSpan={4} onClick={open('processes')} editing={edit}>
-          <ProcessesWidget onOpenDetail={open('processes')} isEditing={edit} />
-        </WCard>
-        <WCard span={4} rowSpan={4} onClick={open('docker')} editing={edit}>
-          <DockerWidget onOpenDetail={open('docker')} isEditing={edit} />
-        </WCard>
-        <WCard span={3} rowSpan={4} onClick={open('users')} editing={edit}>
-          <UsersWidget onOpenDetail={open('users')} isEditing={edit} />
-        </WCard>
-
-        {/* ── Row D: services + swap ── */}
-        <WCard span={8} rowSpan={3} onClick={open('services')} editing={edit}>
-          <ServicesWidget onOpenDetail={open('services')} isEditing={edit} expanded />
-        </WCard>
-        <WCard span={4} rowSpan={3} onClick={open('memory')} editing={edit}>
-          <SwapMemMapWidget onOpenDetail={open('memory')} isEditing={edit} />
-        </WCard>
-      </div>
-
-      {detailWidget && (
-        <WidgetDetailModal
-          widgetType={detailWidget}
-          onClose={() => setDetailWidget(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-/* ── Swap + Memory Map mini-widget (row D right) ── */
-function SwapMemMapWidget({ onOpenDetail, isEditing }: { onOpenDetail: () => void; isEditing: boolean }) {
-  const metrics = useStore((s) => s.metrics);
-  if (!metrics) return null;
-  const { memory, swap } = metrics;
-
-  const segments = [
-    { label: 'Used', value: memory.used, color: 'var(--accent-red)', pct: memory.usage },
-    { label: 'Cached', value: memory.cached, color: 'var(--accent-blue)', pct: (memory.cached / memory.total) * 100 },
-    { label: 'Buffers', value: memory.buffers, color: 'var(--accent-purple)', pct: (memory.buffers / memory.total) * 100 },
-    { label: 'Free', value: memory.free, color: 'var(--bg-hover)', pct: (memory.free / memory.total) * 100 },
-  ];
-
-  function fmt(mb: number) {
-    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-    return `${mb} MB`;
+  function renderContent(w: WidgetConfig) {
+    const edit = isEditingDashboard;
+    const open = () => setDetailWidget(w.type);
+    switch (w.type) {
+      case 'cpu':         return <CpuWidget onOpenDetail={open} isEditing={edit} variant={isChart ? 'chart' : 'number'} />;
+      case 'memory':      return <MemoryWidget onOpenDetail={open} isEditing={edit} variant={isChart ? 'chart' : 'number'} />;
+      case 'network':     return <NetworkWidget onOpenDetail={open} isEditing={edit} variant={isChart ? 'chart' : 'number'} />;
+      case 'uptime':      return <UptimeWidget onOpenDetail={open} isEditing={edit} />;
+      case 'load':        return <LoadWidget onOpenDetail={open} isEditing={edit} variant={isChart ? 'chart' : 'number'} />;
+      case 'temperature': return <TempWidget onOpenDetail={open} isEditing={edit} />;
+      case 'disk':        return <DiskWidget onOpenDetail={open} isEditing={edit} />;
+      case 'filesystems': return <FilesystemsWidget onOpenDetail={open} isEditing={edit} />;
+      case 'processes':   return <ProcessesWidget onOpenDetail={open} isEditing={edit} />;
+      case 'services':    return <ServicesWidget onOpenDetail={open} isEditing={edit} expanded />;
+      case 'docker':      return <DockerWidget onOpenDetail={open} isEditing={edit} />;
+      case 'users':       return <UsersWidget onOpenDetail={open} isEditing={edit} />;
+      case 'swap':        return <SwapMemMapWidget onOpenDetail={open} isEditing={edit} />;
+      default:            return <ComingSoonWidget type={w.type} title={w.title} />;
+    }
   }
 
   return (
-    <div className="group h-full" onClick={!isEditing ? onOpenDetail : undefined}>
-      <div className="flex flex-col h-full px-3 pt-3 pb-3">
-        <div className="metric-label mb-2">Memory Map</div>
-
-        {/* Stacked bar */}
-        <div className="h-4 rounded-full overflow-hidden flex mb-3" style={{ background: 'var(--bg-hover)' }}>
-          {segments.filter((s) => s.label !== 'Free').map((seg) => (
+    <div className="h-full overflow-y-auto p-4">
+      <div ref={containerRef}>
+        <GridLayout
+          width={width}
+          layout={layoutItems}
+          gridConfig={{
+            cols: 12,
+            rowHeight: 88,
+            margin: [12, 12] as const,
+            containerPadding: [0, 0] as const,
+          }}
+          dragConfig={{
+            enabled: isEditingDashboard,
+          }}
+          resizeConfig={{
+            enabled: isEditingDashboard,
+            handles: ['se'] as const,
+          }}
+          compactor={verticalCompactor}
+          onDragStop={(layout) => persistLayout(layout)}
+          onResizeStop={(layout) => persistLayout(layout)}
+          className={isEditingDashboard ? 'rgl-editing' : ''}
+        >
+          {widgets.map((w) => (
             <div
-              key={seg.label}
-              style={{ width: `${seg.pct}%`, background: seg.color, transition: 'width 0.5s ease' }}
-            />
-          ))}
-        </div>
+              key={w.id}
+              className={[
+                'card overflow-hidden',
+                isEditingDashboard
+                  ? 'ring-2 ring-[rgba(88,166,255,0.4)] select-none'
+                  : 'card-hover cursor-pointer',
+              ].join(' ')}
+              style={{ position: 'relative' }}
+              onClick={!isEditingDashboard ? () => setDetailWidget(w.type) : undefined}
+            >
+              {/* Drag handle strip — only in edit mode */}
+              {isEditingDashboard && (
+                <div
+                  className="absolute inset-x-0 top-0 z-20 flex items-center gap-1.5 px-3 py-1.5 cursor-grab active:cursor-grabbing"
+                  style={{
+                    background: 'rgba(88,166,255,0.08)',
+                    borderBottom: '1px solid rgba(88,166,255,0.15)',
+                  }}
+                >
+                  <GripVertical size={12} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
+                  <span
+                    className="text-[10px] font-medium truncate"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    {w.title}
+                  </span>
+                </div>
+              )}
 
-        {/* Legend */}
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] mb-3">
-          {segments.map((seg) => (
-            <div key={seg.label} className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: seg.color }} />
-              <span className="text-[var(--text-muted)]">{seg.label}</span>
-              <span className="text-[var(--text-secondary)] font-mono ml-auto">{fmt(seg.value)}</span>
+              {/* Widget content */}
+              <div className={`h-full ${isEditingDashboard ? 'pt-[30px]' : ''}`}>
+                {renderContent(w)}
+              </div>
             </div>
           ))}
-        </div>
-
-        {/* Swap */}
-        <div className="pt-2 border-t border-[var(--border-subtle)]">
-          <div className="flex items-center justify-between text-[11px] mb-1">
-            <span className="text-[var(--text-muted)]">Swap</span>
-            <span className="font-mono text-[var(--text-secondary)]">{fmt(swap.used)} / {fmt(swap.total)}</span>
-          </div>
-          <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${swap.usage}%`, background: 'var(--accent-cyan)' }}
-            />
-          </div>
-        </div>
+        </GridLayout>
       </div>
+
+      {detailWidget && (
+        <WidgetDetailModal widgetType={detailWidget} onClose={() => setDetailWidget(null)} />
+      )}
     </div>
   );
 }

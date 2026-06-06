@@ -46,6 +46,9 @@ const defaultWidgets: WidgetConfig[] = [
   { id: 'docker', type: 'docker', title: 'Docker', x: 9, y: 5, w: 3, h: 4, minW: 2, minH: 3 },
   { id: 'filesystems', type: 'filesystems', title: 'Filesystems', x: 0, y: 9, w: 6, h: 3, minW: 4, minH: 2 },
   { id: 'users', type: 'users', title: 'Logged In Users', x: 6, y: 9, w: 6, h: 3, minW: 3, minH: 2 },
+  { id: 'bandwidth', type: 'bandwidth', title: 'Bandwidth Monitor', x: 0, y: 12, w: 4, h: 3, minW: 3, minH: 2 },
+  { id: 'logs', type: 'logs', title: 'Log Viewer', x: 4, y: 12, w: 4, h: 3, minW: 3, minH: 2 },
+  { id: 'firewall', type: 'firewall', title: 'Firewall Rules', x: 8, y: 12, w: 4, h: 3, minW: 3, minH: 2 },
 ];
 
 export const useStore = create<AppState>()(
