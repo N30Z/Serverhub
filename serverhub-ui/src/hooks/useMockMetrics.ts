@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import {
   MOCK_METRICS, MOCK_ALERTS, MOCK_ALERT_RULES, MOCK_CRON_JOBS,
 } from '../data/mockData';
-import type { SystemMetrics } from '../types';
+import type { Alert, AlertRule, CronJob, SystemMetrics } from '../types';
 
 // ── Dev-mode mock data ────────────────────────────────────────────────────────
 
@@ -43,6 +43,14 @@ function buildLiveMetrics(): SystemMetrics {
   };
 }
 
+async function fetchJSON<T>(path: string, token: string): Promise<T> {
+  const res = await fetch(path, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json() as Promise<T>;
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useMockMetrics() {
@@ -50,14 +58,22 @@ export function useMockMetrics() {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // Always seed alerts/cron from mock data (real API endpoints are future work)
-    setAlerts(MOCK_ALERTS);
-    setAlertRules(MOCK_ALERT_RULES);
-    setCronJobs(MOCK_CRON_JOBS);
-
-    // In production mode with a valid auth token, connect to the real agent WebSocket.
-    // In dev mode (Vite dev server), fall back to mock data.
+    // In production mode with a valid auth token, connect to the real agent.
     if (import.meta.env.PROD && authToken) {
+      // Fetch alerts, rules and cron jobs from real API endpoints
+      fetchJSON<Alert[]>('/api/alerts', authToken)
+        .then(setAlerts)
+        .catch(() => setAlerts(MOCK_ALERTS));
+
+      fetchJSON<AlertRule[]>('/api/alerts/rules', authToken)
+        .then(setAlertRules)
+        .catch(() => setAlertRules(MOCK_ALERT_RULES));
+
+      fetchJSON<CronJob[]>('/api/cron', authToken)
+        .then(setCronJobs)
+        .catch(() => setCronJobs(MOCK_CRON_JOBS));
+
+      // Connect to the real agent WebSocket for live metrics
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const url = `${proto}//${window.location.host}/ws?token=${authToken}`;
 
@@ -72,7 +88,6 @@ export function useMockMetrics() {
         };
 
         ws.onclose = () => {
-          // Reconnect after 3 s if component is still mounted
           setTimeout(() => {
             if (wsRef.current?.readyState !== WebSocket.OPEN) connect();
           }, 3000);
@@ -88,7 +103,11 @@ export function useMockMetrics() {
       };
     }
 
-    // Dev mode: poll mock data
+    // Dev mode: use mock data
+    setAlerts(MOCK_ALERTS);
+    setAlertRules(MOCK_ALERT_RULES);
+    setCronJobs(MOCK_CRON_JOBS);
+
     const tick = () => setMetrics(buildLiveMetrics());
     tick();
     const id = setInterval(tick, 3000);

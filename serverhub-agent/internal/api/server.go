@@ -67,6 +67,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 					return
 				}
 				s.broadcast(data)
+				if m := s.collector.LatestMetrics(); m != nil {
+					go s.evaluateAlerts(m)
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -82,9 +85,19 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/api/auth/logout", s.withAuth(s.handleLogout))
 	mux.HandleFunc("/api/metrics", s.withAuth(s.handleMetrics))
 	mux.HandleFunc("/api/files/read", s.withAuth(s.handleFileRead))
+	mux.HandleFunc("/api/files/delete", s.withAuth(s.handleFileDelete))
+	mux.HandleFunc("/api/files/upload", s.withAuth(s.handleFileUpload))
+	mux.HandleFunc("/api/files/mkdir", s.withAuth(s.handleFileMkdir))
+	mux.HandleFunc("/api/files/write", s.withAuth(s.handleFileWrite))
 	mux.HandleFunc("/api/files", s.withAuth(s.handleFiles))
 	mux.HandleFunc("/api/exec", s.withAuth(s.handleExec))
-	mux.HandleFunc("/api/cron/", s.withAuth(s.handleCronByID))
+	mux.HandleFunc("/api/alerts/rules/", s.withAuth(s.handleAlertRuleByID))
+	mux.HandleFunc("/api/alerts/rules", s.withAuth(s.handleAlertRules))
+	mux.HandleFunc("/api/alerts/", s.withAuth(s.handleAlertAction))
+	mux.HandleFunc("/api/alerts", s.withAuth(s.handleAlerts))
+	mux.HandleFunc("/api/services/", s.withAuth(s.handleServiceAction))
+	mux.HandleFunc("/api/docker/", s.withAuth(s.handleDockerMux))
+	mux.HandleFunc("/api/cron/", s.withAuth(s.handleCronMux))
 	mux.HandleFunc("/api/cron", s.withAuth(s.handleCron))
 	mux.HandleFunc("/api/terminal", s.handleTerminalWS) // auth handled inside (token via query param)
 	mux.HandleFunc("/terminal", s.handleTerminalPage)
@@ -113,6 +126,27 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 // ── handlers ─────────────────────────────────────────────────────────────────
+
+func (s *Server) handleDockerMux(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/logs") {
+		s.handleDockerLogs(w, r)
+	} else if strings.HasSuffix(r.URL.Path, "/action") {
+		s.handleDockerAction(w, r)
+	} else {
+		http.Error(w, "not found", http.StatusNotFound)
+	}
+}
+
+func (s *Server) handleCronMux(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/run"):
+		s.handleCronRun(w, r)
+	case strings.HasSuffix(r.URL.Path, "/history"):
+		s.handleCronHistory(w, r)
+	default:
+		s.handleCronByID(w, r)
+	}
+}
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

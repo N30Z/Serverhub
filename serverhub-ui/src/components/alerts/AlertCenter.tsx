@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Bell, CheckCircle, AlertTriangle, AlertOctagon, Info, Settings2, Mail, Smartphone, X, Filter } from 'lucide-react';
+import { Bell, CheckCircle, AlertTriangle, AlertOctagon, Info, Settings2, Mail, Smartphone, Filter } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { apiRequest } from '../../api/client';
 import type { Alert, AlertRule, AlertType } from '../../types';
 import { clsx } from 'clsx';
 
@@ -73,12 +74,36 @@ function AlertCard({ alert, onResolve }: { alert: Alert; onResolve: () => void }
   );
 }
 
-function AlertRuleRow({ rule }: { rule: AlertRule }) {
-  const [enabled, setEnabled] = useState(rule.enabled);
+function AlertRuleRow({ rule, onChange }: { rule: AlertRule; onChange: (updated: AlertRule) => void }) {
+  const [saving, setSaving] = useState(false);
+
+  const toggle = async () => {
+    const updated = { ...rule, enabled: !rule.enabled };
+    setSaving(true);
+    try {
+      await apiRequest(`/api/alerts/rules/${rule.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updated),
+      });
+      onChange(updated);
+    } catch { /* revert on error by not calling onChange */ }
+    setSaving(false);
+  };
+
+  const toggleNotify = async (field: 'notifyEmail' | 'notifyPush') => {
+    const updated = { ...rule, [field]: !rule[field] };
+    try {
+      await apiRequest(`/api/alerts/rules/${rule.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updated),
+      });
+      onChange(updated);
+    } catch { /* ignore */ }
+  };
 
   return (
     <div className="flex items-center gap-4 p-4 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-all">
-      <span className="text-xl">{TYPE_ICONS[rule.type]}</span>
+      <span className="text-xl">{TYPE_ICONS[rule.type as AlertType] ?? '⚠️'}</span>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-white">{rule.description}</div>
         <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
@@ -87,24 +112,34 @@ function AlertRuleRow({ rule }: { rule: AlertRule }) {
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1">
+        <button
+          className="flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity"
+          onClick={() => toggleNotify('notifyEmail')}
+          title="Toggle email notifications"
+        >
           <Mail size={12} className={rule.notifyEmail ? 'text-[var(--accent-blue)]' : 'text-[var(--text-muted)]'} />
           <span className="text-[10px] text-[var(--text-muted)]">Email</span>
-        </div>
-        <div className="flex items-center gap-1">
+        </button>
+        <button
+          className="flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity"
+          onClick={() => toggleNotify('notifyPush')}
+          title="Toggle push notifications"
+        >
           <Smartphone size={12} className={rule.notifyPush ? 'text-[var(--accent-green)]' : 'text-[var(--text-muted)]'} />
           <span className="text-[10px] text-[var(--text-muted)]">Push</span>
-        </div>
+        </button>
         <button
           className={clsx(
             'relative w-10 h-5 rounded-full transition-all flex-shrink-0',
-            enabled ? 'bg-[var(--accent-green)]' : 'bg-[var(--bg-hover)]'
+            rule.enabled ? 'bg-[var(--accent-green)]' : 'bg-[var(--bg-hover)]',
+            saving ? 'opacity-50 cursor-wait' : ''
           )}
-          onClick={() => setEnabled(!enabled)}
+          onClick={toggle}
+          disabled={saving}
         >
           <span className={clsx(
             'absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all',
-            enabled ? 'left-5' : 'left-0.5'
+            rule.enabled ? 'left-5' : 'left-0.5'
           )} />
         </button>
         <button className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-card)] transition-colors">
@@ -116,7 +151,7 @@ function AlertRuleRow({ rule }: { rule: AlertRule }) {
 }
 
 export default function AlertCenter() {
-  const { alerts: rawAlerts, alertRules, setAlerts } = useStore();
+  const { alerts: rawAlerts, alertRules, setAlerts, setAlertRules } = useStore();
   const [tab, setTab] = useState<'alerts' | 'rules'>('alerts');
   const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('all');
   const [typeFilter, setTypeFilter] = useState<AlertType | 'all'>('all');
@@ -131,8 +166,15 @@ export default function AlertCenter() {
   const active = rawAlerts.filter((a) => !a.resolved);
   const critical = active.filter((a) => a.severity === 'critical');
 
-  const resolveAlert = (id: string) => {
+  const resolveAlert = async (id: string) => {
+    try {
+      await apiRequest(`/api/alerts/${id}/resolve`, { method: 'POST' });
+    } catch { /* best-effort — update UI regardless */ }
     setAlerts(rawAlerts.map((a) => a.id === id ? { ...a, resolved: true } : a));
+  };
+
+  const updateRule = (updated: AlertRule) => {
+    setAlertRules(alertRules.map((r) => r.id === updated.id ? updated : r));
   };
 
   return (
@@ -152,7 +194,6 @@ export default function AlertCenter() {
             </div>
           ))}
         </div>
-
         <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] rounded-lg p-0.5">
           {[['alerts', 'Alerts'], ['rules', 'Rules']].map(([id, label]) => (
             <button
@@ -168,7 +209,6 @@ export default function AlertCenter() {
 
       {tab === 'alerts' ? (
         <>
-          {/* Filters */}
           <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)] flex-shrink-0 flex-wrap">
             <Filter size={12} className="text-[var(--text-muted)]" />
             <div className="flex items-center gap-1">
@@ -195,8 +235,6 @@ export default function AlertCenter() {
               ))}
             </div>
           </div>
-
-          {/* Alert list */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {alerts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-[var(--text-muted)]">
@@ -213,20 +251,10 @@ export default function AlertCenter() {
       ) : (
         <div className="flex-1 overflow-y-auto">
           <div className="px-4 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
-            <div className="text-xs text-[var(--text-muted)]">Configure when and how you get notified</div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] border border-[var(--border)] rounded-lg px-3 py-1.5">
-                <Mail size={11} className="text-[var(--accent-blue)]" />
-                admin@example.com
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] border border-[var(--border)] rounded-lg px-3 py-1.5">
-                <Smartphone size={11} className="text-[var(--accent-green)]" />
-                Android Push
-              </div>
-            </div>
+            <div className="text-xs text-[var(--text-muted)]">Configure when and how you get notified. Toggle email/push per rule, and enable/disable rules with the switch.</div>
           </div>
           {alertRules.map((rule) => (
-            <AlertRuleRow key={rule.id} rule={rule} />
+            <AlertRuleRow key={rule.id} rule={rule} onChange={updateRule} />
           ))}
         </div>
       )}
