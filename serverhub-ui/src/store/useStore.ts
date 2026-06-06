@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { SystemMetrics, Alert, AlertRule, CronJob, WidgetConfig, Theme } from '../types';
 
 export type DashboardVariant = 'chart' | 'number';
@@ -47,31 +48,45 @@ const defaultWidgets: WidgetConfig[] = [
   { id: 'users', type: 'users', title: 'Logged In Users', x: 6, y: 9, w: 6, h: 3, minW: 3, minH: 2 },
 ];
 
-export const useStore = create<AppState>((set) => ({
-  theme: 'dark',
-  activeView: 'dashboard',
-  isSidebarCollapsed: false,
-  metrics: null,
-  alerts: [],
-  alertRules: [],
-  cronJobs: [],
-  widgets: defaultWidgets,
-  isAuthenticated: false,
-  authToken: null,
-  serverName: 'prod-server-01',
-  isEditingDashboard: false,
-  dashboardVariant: 'chart',
+export const useStore = create<AppState>()(
+  persist(
+    (set) => ({
+      theme: 'dark',
+      activeView: 'dashboard',
+      isSidebarCollapsed: false,
+      metrics: null,
+      alerts: [],
+      alertRules: [],
+      cronJobs: [],
+      widgets: defaultWidgets,
+      isAuthenticated: false,
+      authToken: null,
+      serverName: 'prod-server-01',
+      isEditingDashboard: false,
+      dashboardVariant: 'chart',
 
-  setTheme: (theme) => set({ theme }),
-  setActiveView: (activeView) => set({ activeView }),
-  toggleSidebar: () => set((s) => ({ isSidebarCollapsed: !s.isSidebarCollapsed })),
-  setMetrics: (metrics) => set({ metrics }),
-  setAlerts: (alerts) => set({ alerts }),
-  setAlertRules: (alertRules) => set({ alertRules }),
-  setCronJobs: (cronJobs) => set({ cronJobs }),
-  setWidgets: (widgets) => set({ widgets }),
-  setAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
-  setAuthToken: (authToken) => set({ authToken }),
-  toggleEditDashboard: () => set((s) => ({ isEditingDashboard: !s.isEditingDashboard })),
-  setDashboardVariant: (dashboardVariant) => set({ dashboardVariant }),
-}));
+      setTheme: (theme) => set({ theme }),
+      setActiveView: (activeView) => set({ activeView }),
+      toggleSidebar: () => set((s) => ({ isSidebarCollapsed: !s.isSidebarCollapsed })),
+      setMetrics: (metrics) => set({ metrics }),
+      setAlerts: (alerts) => set({ alerts }),
+      setAlertRules: (alertRules) => set({ alertRules }),
+      setCronJobs: (cronJobs) => set({ cronJobs }),
+      setWidgets: (widgets) => set({ widgets }),
+      setAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
+      setAuthToken: (authToken) => set({ authToken }),
+      toggleEditDashboard: () => set((s) => ({ isEditingDashboard: !s.isEditingDashboard })),
+      setDashboardVariant: (dashboardVariant) => set({ dashboardVariant }),
+    }),
+    {
+      name: 'serverhub-store',
+      partialize: (s) => ({
+        isAuthenticated: s.isAuthenticated,
+        authToken: s.authToken,
+        theme: s.theme,
+        dashboardVariant: s.dashboardVariant,
+        widgets: s.widgets,
+      }),
+    },
+  ),
+);
