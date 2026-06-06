@@ -53,7 +53,7 @@ function CpuDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStor
         <div className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">History (1 min)</div>
         <div className="h-40">
           <ResponsiveContainer>
-            <AreaChart data={cpu.history}>
+            <AreaChart data={cpu.history ?? []}>
               <defs>
                 <linearGradient id="cpuDetailGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={color} stopOpacity={0.4} />
@@ -72,7 +72,7 @@ function CpuDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStor
       <div>
         <div className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">Per-Core Usage</div>
         <div className="grid grid-cols-8 gap-1.5">
-          {cpu.perCore.map((c, i) => {
+          {(cpu.perCore ?? []).map((c, i) => {
             const col = getUsageColor(c);
             return (
               <div key={i} className="text-center">
@@ -120,7 +120,7 @@ function MemoryDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useS
         <div className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">History</div>
         <div className="h-40">
           <ResponsiveContainer>
-            <AreaChart data={memory.history}>
+            <AreaChart data={memory.history ?? []}>
               <defs>
                 <linearGradient id="memDetailGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={color} stopOpacity={0.4} />
@@ -145,7 +145,7 @@ function NetworkDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof use
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        {network.interfaces.map((iface) => (
+        {(network.interfaces ?? []).map((iface) => (
           <div key={iface.name} className="p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-tertiary)]">
             <div className="flex items-center justify-between mb-2">
               <span className="font-mono font-semibold text-sm">{iface.name}</span>
@@ -165,7 +165,7 @@ function NetworkDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof use
         <div className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">Traffic History</div>
         <div className="h-40">
           <ResponsiveContainer>
-            <AreaChart data={network.history}>
+            <AreaChart data={network.history ?? []}>
               <defs>
                 <linearGradient id="rxDetailGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="var(--accent-blue)" stopOpacity={0.4} />
@@ -212,9 +212,9 @@ function DockerDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useS
               <div><span className="text-[var(--text-muted)]">Up: </span><span className="text-[var(--text-secondary)]">{c.uptime}</span></div>
             </div>
           )}
-          {c.ports.length > 0 && (
+          {(c.ports ?? []).length > 0 && (
             <div className="mt-1 flex gap-1 flex-wrap">
-              {c.ports.map((p) => (
+              {(c.ports ?? []).map((p) => (
                 <span key={p} className="badge badge-purple text-[9px]">{p}</span>
               ))}
             </div>

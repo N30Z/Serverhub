@@ -102,7 +102,22 @@ func (c *Collector) collect() {
 		elapsed = float64(c.cfg.Monitoring.Interval)
 	}
 
-	m := &Metrics{}
+	// Initialise all slice fields to empty (non-nil) so they serialise as []
+	// rather than null in JSON, which React/Recharts cannot handle.
+	m := &Metrics{
+		Disk:         make([]DiskMetrics, 0),
+		Temperatures: make([]TempMetrics, 0),
+		Processes:    make([]Process, 0),
+		Users:        make([]LoggedUser, 0),
+		Services:     make([]Service, 0),
+		Docker:       make([]DockerContainer, 0),
+	}
+	m.Network.Interfaces = make([]NetworkInterface, 0)
+	m.Network.History = make([]NetPoint, 0)
+	m.CPU.History = make([]TimePoint, 0)
+	m.CPU.PerCore = make([]float64, 0)
+	m.Memory.History = make([]TimePoint, 0)
+	m.Load.History = make([]TimePoint, 0)
 
 	// ── Host ──────────────────────────────────────────────────────────────────
 	if info, err := gohost.Info(); err == nil {
@@ -313,7 +328,7 @@ func collectProcesses() []Process {
 		"ps", "-eo", "pid=,user=,pcpu=,pmem=,stat=,comm=,etime=", "--sort=-pcpu",
 	).Output()
 	if err != nil {
-		return nil
+		return []Process{}
 	}
 	var procs []Process
 	scanner := bufio.NewScanner(bytes.NewReader(out))
@@ -348,7 +363,7 @@ func collectProcesses() []Process {
 
 func collectServices() []Service {
 	if _, err := exec.LookPath("systemctl"); err != nil {
-		return nil
+		return []Service{}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
@@ -373,7 +388,7 @@ func collectServices() []Service {
 		"--type=service", "--all", "--no-pager", "--no-legend", "--plain",
 	).Output()
 	if err != nil {
-		return nil
+		return []Service{}
 	}
 
 	var services []Service
@@ -415,7 +430,7 @@ func collectUsers() []LoggedUser {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "who").Output()
 	if err != nil {
-		return nil
+		return []LoggedUser{}
 	}
 	var users []LoggedUser
 	sc := bufio.NewScanner(bytes.NewReader(out))
@@ -441,7 +456,7 @@ func collectUsers() []LoggedUser {
 
 func collectDocker() []DockerContainer {
 	if _, err := exec.LookPath("docker"); err != nil {
-		return nil
+		return []DockerContainer{}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
@@ -452,7 +467,7 @@ func collectDocker() []DockerContainer {
 		"--format", `{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}|{{.CreatedAt}}`,
 	).Output()
 	if err != nil {
-		return nil
+		return []DockerContainer{}
 	}
 
 	// Get stats (non-blocking, short timeout)
@@ -489,7 +504,7 @@ func collectDocker() []DockerContainer {
 		}
 
 		status, uptime := parseDockerStatus(statusFull)
-		var ports []string
+		ports := []string{}
 		for _, p := range strings.Split(portsRaw, ",") {
 			if p = strings.TrimSpace(p); p != "" {
 				ports = append(ports, p)
