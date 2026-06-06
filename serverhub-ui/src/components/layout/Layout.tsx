@@ -10,21 +10,29 @@ import SettingsPage from '../settings/Settings';
 import ProcessesView from '../views/ProcessesView';
 import ServicesView from '../views/ServicesView';
 import DockerView from '../views/DockerView';
+import StorageView from '../views/StorageView';
+import NetworkView from '../views/NetworkView';
+import SecurityView from '../views/SecurityView';
+import LogsView from '../views/LogsView';
 
 export function Layout() {
   const { activeView } = useStore();
 
   const renderView = () => {
     switch (activeView) {
-      case 'dashboard': return <Dashboard />;
-      case 'ssh': return <SSHTerminal />;
-      case 'sftp': return <SFTPClient />;
-      case 'cron': return <CronManager />;
-      case 'alerts': return <AlertCenter />;
-      case 'processes': return <ProcessesView />;
-      case 'services': return <ServicesView />;
-      case 'docker': return <DockerView />;
-      case 'settings': return <SettingsPage />;
+      case 'dashboard':  return <Dashboard />;
+      case 'ssh':        return <SSHTerminal />;
+      case 'sftp':       return <SFTPClient />;
+      case 'cron':       return <CronManager />;
+      case 'alerts':     return <AlertCenter />;
+      case 'processes':  return <ProcessesView />;
+      case 'services':   return <ServicesView />;
+      case 'docker':     return <DockerView />;
+      case 'storage':    return <StorageView />;
+      case 'network':    return <NetworkView />;
+      case 'security':   return <SecurityView />;
+      case 'logs':       return <LogsView />;
+      case 'settings':   return <SettingsPage />;
       default: return (
         <div className="flex-1 flex items-center justify-center text-[var(--text-muted)]">
           <div className="text-center">

@@ -1,4 +1,5 @@
-import { X, TrendingUp, AlertCircle, Settings2 } from 'lucide-react';
+import { useState } from 'react';
+import { X, TrendingUp, AlertCircle, Settings2, Search } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import type { WidgetType } from '../../types';
 import {
@@ -40,7 +41,6 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 function CpuDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStore.getState>['metrics']> }) {
   const { cpu } = metrics;
   const color = getUsageColor(cpu.usage);
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-3">
@@ -98,7 +98,6 @@ function MemoryDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useS
     { name: 'Buffers', value: memory.buffers, color: 'var(--accent-purple)' },
     { name: 'Free', value: memory.free, color: 'var(--bg-hover)' },
   ];
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-3">
@@ -191,6 +190,256 @@ function NetworkDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof use
   );
 }
 
+function LoadDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStore.getState>['metrics']> }) {
+  const { load, cpu } = metrics;
+  const utilPct = Math.min((load.load1 / cpu.cores) * 100, 100);
+  const color = getUsageColor(utilPct);
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-4 gap-3">
+        <StatCard label="1 min" value={load.load1.toFixed(2)} color={getUsageColor(Math.min((load.load1 / cpu.cores) * 100, 100))} />
+        <StatCard label="5 min" value={load.load5.toFixed(2)} color={getUsageColor(Math.min((load.load5 / cpu.cores) * 100, 100))} />
+        <StatCard label="15 min" value={load.load15.toFixed(2)} color={getUsageColor(Math.min((load.load15 / cpu.cores) * 100, 100))} />
+        <StatCard label="CPU Cores" value={String(cpu.cores)} sub={`${utilPct.toFixed(0)}% utilised`} />
+      </div>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-semibold">Overall Utilisation</span>
+          <span className="text-xs font-mono" style={{ color }}>{utilPct.toFixed(1)}%</span>
+        </div>
+        <div className="h-2 rounded-full bg-[var(--bg-hover)] overflow-hidden">
+          <div className="h-full rounded-full transition-all" style={{ width: `${utilPct}%`, background: color }} />
+        </div>
+        <div className="flex justify-between text-[10px] text-[var(--text-muted)] mt-0.5">
+          <span>0</span>
+          <span>Saturated at {cpu.cores}.0</span>
+        </div>
+      </div>
+      <div>
+        <div className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">Load History</div>
+        <div className="h-40">
+          <ResponsiveContainer>
+            <LineChart data={load.history ?? []}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+              <XAxis dataKey="time" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={(t) => new Date(t).toLocaleTimeString([], { second: '2-digit', minute: '2-digit' })} />
+              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+              <Tooltip contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} formatter={(v) => [(v as number).toFixed(2), 'Load avg']} />
+              <Line type="monotone" dataKey="value" stroke="var(--accent-blue)" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiskDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStore.getState>['metrics']> }) {
+  const { disk } = metrics;
+  return (
+    <div className="space-y-4">
+      <div>
+        <div className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">I/O Rates</div>
+        <div className="h-44">
+          <ResponsiveContainer>
+            <BarChart data={disk.map((d) => ({ name: d.mountpoint, read: d.readSpeed, write: d.writeSpeed }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={(v) => `${v}MB/s`} />
+              <Tooltip contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} formatter={(v, name) => [`${(v as number).toFixed(1)} MB/s`, name === 'read' ? '↓ Read' : '↑ Write']} />
+              <Legend wrapperStyle={{ fontSize: '11px' }} />
+              <Bar dataKey="read" name="read" fill="var(--accent-blue)" radius={[3, 3, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="write" name="write" fill="var(--accent-purple)" radius={[3, 3, 0, 0]} maxBarSize={32} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {disk.map((d) => {
+          const color = getUsageColor(d.usage);
+          return (
+            <div key={d.mountpoint} className="p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-tertiary)]">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <span className="font-mono font-semibold text-sm">{d.mountpoint}</span>
+                  <span className="text-[10px] text-[var(--text-muted)] ml-2">{d.device} · {d.fstype}</span>
+                </div>
+                <span className="text-sm font-bold font-mono" style={{ color }}>{d.usage.toFixed(1)}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[var(--bg-hover)] overflow-hidden mb-1">
+                <div className="h-full rounded-full" style={{ width: `${d.usage}%`, background: color }} />
+              </div>
+              <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+                <span>{formatBytes(d.used * 1024 * 1024)} used</span>
+                <span>{formatBytes(d.free * 1024 * 1024)} free of {formatBytes(d.total * 1024 * 1024)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FilesystemsDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStore.getState>['metrics']> }) {
+  const { disk } = metrics;
+  return (
+    <div className="space-y-2">
+      <div className="grid text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] px-3 py-2 border-b border-[var(--border-subtle)]"
+        style={{ gridTemplateColumns: '1fr 6rem 7rem 7rem 6rem 8rem' }}>
+        <span>Mountpoint</span><span>Type</span><span>Total</span><span>Used</span><span>Usage</span><span className="text-right">Free</span>
+      </div>
+      {disk.map((d) => {
+        const color = getUsageColor(d.usage);
+        return (
+          <div key={d.mountpoint} className="space-y-1 px-1">
+            <div className="grid items-center px-2 py-2 rounded-lg hover:bg-[var(--bg-hover)] text-sm"
+              style={{ gridTemplateColumns: '1fr 6rem 7rem 7rem 6rem 8rem' }}>
+              <div>
+                <div className="font-mono font-medium text-white text-xs">{d.mountpoint}</div>
+                <div className="text-[10px] text-[var(--text-muted)]">{d.device}</div>
+              </div>
+              <span className="text-xs text-[var(--text-muted)]">{d.fstype}</span>
+              <span className="text-xs font-mono text-[var(--text-secondary)]">{formatBytes(d.total * 1024 * 1024)}</span>
+              <span className="text-xs font-mono" style={{ color }}>{formatBytes(d.used * 1024 * 1024)}</span>
+              <div>
+                <div className="text-xs font-mono mb-0.5" style={{ color }}>{d.usage.toFixed(1)}%</div>
+                <div className="h-1 rounded-full bg-[var(--bg-hover)] overflow-hidden w-full">
+                  <div className="h-full rounded-full" style={{ width: `${d.usage}%`, background: color }} />
+                </div>
+              </div>
+              <span className="text-xs font-mono text-right text-[var(--text-secondary)]">{formatBytes(d.free * 1024 * 1024)}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProcessesDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStore.getState>['metrics']> }) {
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'cpu' | 'memory' | 'pid'>('cpu');
+
+  const procs = metrics.processes
+    .filter((p) => !search || p.name.includes(search) || p.user.includes(search) || String(p.pid).includes(search))
+    .sort((a, b) => b[sortBy] - a[sortBy]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input className="input pl-8 py-1.5 text-xs w-full" placeholder="Filter by name, user or PID..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+          Sort:
+          {(['cpu', 'memory', 'pid'] as const).map((s) => (
+            <button key={s} className={`px-2 py-1 rounded text-xs ${sortBy === s ? 'bg-[var(--bg-card)] text-white' : 'hover:text-white'}`} onClick={() => setSortBy(s)}>
+              {s.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="grid text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] px-2 py-1.5 border-b border-[var(--border-subtle)]"
+          style={{ gridTemplateColumns: '3.5rem 1fr 6rem 4.5rem 4.5rem 3rem 6rem' }}>
+          <span>PID</span><span>Name</span><span>User</span>
+          <span className="text-right">CPU%</span><span className="text-right">MEM%</span>
+          <span className="text-center">Stat</span><span className="text-right">Started</span>
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+          {procs.map((p) => (
+            <div key={p.pid} className="grid items-center px-2 py-2 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] text-sm"
+              style={{ gridTemplateColumns: '3.5rem 1fr 6rem 4.5rem 4.5rem 3rem 6rem' }}>
+              <span className="font-mono text-xs text-[var(--text-muted)]">{p.pid}</span>
+              <span className="font-medium text-white text-xs truncate">{p.name}</span>
+              <span className="text-[var(--text-secondary)] text-xs">{p.user}</span>
+              <span className={`text-right font-mono text-xs ${p.cpu > 15 ? 'text-[var(--accent-yellow)]' : 'text-[var(--text-secondary)]'}`}>{p.cpu.toFixed(1)}</span>
+              <span className={`text-right font-mono text-xs ${p.memory > 5 ? 'text-[var(--accent-blue)]' : 'text-[var(--text-secondary)]'}`}>{p.memory.toFixed(1)}</span>
+              <span className={`text-center font-mono text-xs ${p.status === 'R' ? 'text-[var(--accent-green)]' : 'text-[var(--text-muted)]'}`}>{p.status}</span>
+              <span className="text-right text-xs text-[var(--text-muted)]">{p.started}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ServicesDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStore.getState>['metrics']> }) {
+  const [search, setSearch] = useState('');
+  const svcs = metrics.services.filter((s) => !search || s.name.toLowerCase().includes(search.toLowerCase()));
+  const active = metrics.services.filter((s) => s.status === 'active').length;
+  const failed = metrics.services.filter((s) => s.status === 'failed').length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="badge badge-green">{active} active</span>
+        <span className="badge badge-red">{failed} failed</span>
+        <span className="badge text-[var(--text-muted)] border-[var(--border)]">{metrics.services.length - active - failed} inactive</span>
+        <div className="relative ml-auto">
+          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input className="input pl-8 py-1.5 text-xs w-48" placeholder="Search services..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+      </div>
+      <div>
+        <div className="grid text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] px-2 py-1.5 border-b border-[var(--border-subtle)]"
+          style={{ gridTemplateColumns: '1fr 7rem 5rem 8rem' }}>
+          <span>Service</span><span>Status</span><span>Enabled</span><span>Since</span>
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+          {svcs.map((svc) => (
+            <div key={svc.name} className="grid items-center px-2 py-2.5 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)]"
+              style={{ gridTemplateColumns: '1fr 7rem 5rem 8rem' }}>
+              <div>
+                <div className="text-xs font-medium text-white">{svc.name}</div>
+                <div className="text-[10px] text-[var(--text-muted)] truncate">{svc.description}</div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className={`status-dot ${svc.status === 'active' ? 'status-online' : svc.status === 'failed' ? 'status-error' : 'status-offline'}`} />
+                <span className={`text-xs ${svc.status === 'active' ? 'text-[var(--accent-green)]' : svc.status === 'failed' ? 'text-[var(--accent-red)]' : 'text-[var(--text-muted)]'}`}>{svc.status}</span>
+              </div>
+              <span className={`text-xs ${svc.enabled ? 'text-[var(--accent-green)]' : 'text-[var(--text-muted)]'}`}>{svc.enabled ? 'Yes' : 'No'}</span>
+              <span className="text-[10px] text-[var(--text-muted)]">{svc.since}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UsersDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStore.getState>['metrics']> }) {
+  const { users } = metrics;
+  if (users.length === 0) {
+    return <div className="text-center py-8 text-[var(--text-muted)] text-sm">No users currently logged in</div>;
+  }
+  return (
+    <div className="space-y-2">
+      <div className="grid text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] px-3 py-2 border-b border-[var(--border-subtle)]"
+        style={{ gridTemplateColumns: '8rem 7rem 1fr 10rem' }}>
+        <span>User</span><span>Terminal</span><span>From</span><span className="text-right">Login Time</span>
+      </div>
+      {users.map((u, i) => (
+        <div key={i} className="grid items-center px-3 py-3 rounded-lg hover:bg-[var(--bg-hover)] border border-[var(--border-subtle)]"
+          style={{ gridTemplateColumns: '8rem 7rem 1fr 10rem' }}>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold uppercase"
+              style={{ background: 'rgba(88,166,255,0.15)', color: 'var(--accent-blue)' }}>
+              {u.user[0]}
+            </div>
+            <span className="text-sm font-medium text-white">{u.user}</span>
+          </div>
+          <span className="font-mono text-xs text-[var(--text-muted)]">{u.tty}</span>
+          <span className="text-xs text-[var(--text-secondary)]">{u.from || 'local'}</span>
+          <span className="text-xs text-[var(--text-muted)] text-right">{u.loginTime}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DockerDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useStore.getState>['metrics']> }) {
   return (
     <div className="space-y-2">
@@ -231,10 +480,16 @@ export function WidgetDetailModal({ widgetType, onClose }: Props) {
 
   const renderContent = () => {
     switch (widgetType) {
-      case 'cpu': return <CpuDetail metrics={metrics} />;
-      case 'memory': return <MemoryDetail metrics={metrics} />;
-      case 'network': return <NetworkDetail metrics={metrics} />;
-      case 'docker': return <DockerDetail metrics={metrics} />;
+      case 'cpu':         return <CpuDetail metrics={metrics} />;
+      case 'memory':      return <MemoryDetail metrics={metrics} />;
+      case 'network':     return <NetworkDetail metrics={metrics} />;
+      case 'docker':      return <DockerDetail metrics={metrics} />;
+      case 'load':        return <LoadDetail metrics={metrics} />;
+      case 'disk':        return <DiskDetail metrics={metrics} />;
+      case 'filesystems': return <FilesystemsDetail metrics={metrics} />;
+      case 'processes':   return <ProcessesDetail metrics={metrics} />;
+      case 'services':    return <ServicesDetail metrics={metrics} />;
+      case 'users':       return <UsersDetail metrics={metrics} />;
       case 'uptime': return (
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Uptime" value={formatUptime(metrics.uptime)} />
@@ -267,8 +522,14 @@ export function WidgetDetailModal({ widgetType, onClose }: Props) {
         </div>
       );
       default: return (
-        <div className="text-[var(--text-muted)] text-center py-8">
-          Detailed view for <strong>{widgetType}</strong> coming soon
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-[rgba(88,166,255,0.1)]">
+            <TrendingUp size={22} className="text-[var(--accent-blue)] opacity-60" />
+          </div>
+          <div className="text-[var(--text-muted)] text-sm text-center">
+            <div className="font-medium text-[var(--text-secondary)] mb-1">Detailed view coming soon</div>
+            <div className="text-xs">{TITLES[widgetType] || widgetType} analytics will appear here</div>
+          </div>
         </div>
       );
     }
@@ -280,7 +541,6 @@ export function WidgetDetailModal({ widgetType, onClose }: Props) {
         className="modal w-[700px] max-w-[95vw] animate-slide-in-up"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
           <div className="flex items-center gap-3">
             <TrendingUp size={18} className="text-[var(--accent-blue)]" />
@@ -300,15 +560,13 @@ export function WidgetDetailModal({ widgetType, onClose }: Props) {
           </div>
         </div>
 
-        {/* Alerts notice */}
-        {(widgetType === 'disk' || widgetType === 'filesystems') && (
+        {(widgetType === 'disk' || widgetType === 'filesystems') && metrics.disk.some((d) => d.usage > 75) && (
           <div className="mx-6 mt-4 flex items-center gap-2 p-3 rounded-lg bg-[rgba(210,153,34,0.1)] border border-[rgba(210,153,34,0.3)] text-[var(--accent-yellow)] text-xs">
             <AlertCircle size={14} />
-            <span>/backup is at 80% — approaching warning threshold</span>
+            <span>{metrics.disk.filter((d) => d.usage > 75).map((d) => d.mountpoint).join(', ')} {metrics.disk.filter((d) => d.usage > 75).length > 1 ? 'are' : 'is'} above 75% — consider freeing space</span>
           </div>
         )}
 
-        {/* Content */}
         <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 80px)' }}>
           {renderContent()}
         </div>
