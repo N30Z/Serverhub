@@ -29,8 +29,9 @@ type Collector struct {
 	cfg     *config.Config
 	Updates chan []byte // receives freshly marshalled Metrics JSON on each tick
 
-	mu      sync.RWMutex
-	payload []byte // last marshalled JSON
+	mu            sync.RWMutex
+	payload       []byte   // last marshalled JSON
+	latestMetrics *Metrics
 
 	cpuHist  []TimePoint
 	memHist  []TimePoint
@@ -84,6 +85,13 @@ func (c *Collector) Run(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// LatestMetrics returns a pointer to the most recently collected Metrics struct.
+func (c *Collector) LatestMetrics() *Metrics {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.latestMetrics
 }
 
 // LatestJSON returns a copy of the most recently marshalled metrics.
@@ -296,6 +304,7 @@ func (c *Collector) collect() {
 	}
 	c.mu.Lock()
 	c.payload = data
+	c.latestMetrics = m
 	c.mu.Unlock()
 
 	select {

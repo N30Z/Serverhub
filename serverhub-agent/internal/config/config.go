@@ -25,6 +25,22 @@ type Config struct {
 		Interval int `yaml:"interval"` // seconds between collections
 		History  int `yaml:"history"`  // max history data points kept
 	} `yaml:"monitoring"`
+	Notifications struct {
+		Email struct {
+			Enabled  bool     `yaml:"enabled"`
+			SMTPHost string   `yaml:"smtp_host"`
+			SMTPPort int      `yaml:"smtp_port"`
+			Username string   `yaml:"username"`
+			Password string   `yaml:"password"`
+			From     string   `yaml:"from"`
+			To       []string `yaml:"to"`
+		} `yaml:"email"`
+		Webhook struct {
+			Enabled bool   `yaml:"enabled"`
+			URL     string `yaml:"url"`
+			Token   string `yaml:"token"`
+		} `yaml:"webhook"`
+	} `yaml:"notifications"`
 }
 
 func Load(path string) (*Config, error) {
@@ -48,6 +64,9 @@ func Load(path string) (*Config, error) {
 	if cfg.Monitoring.History == 0 {
 		cfg.Monitoring.History = 60
 	}
+	if cfg.Notifications.Email.SMTPPort == 0 {
+		cfg.Notifications.Email.SMTPPort = 587
+	}
 	return cfg, nil
 }
 
@@ -60,5 +79,6 @@ func defaults() *Config {
 	cfg.Auth.SessionTimeout = 86400
 	cfg.Monitoring.Interval = 3
 	cfg.Monitoring.History = 60
+	cfg.Notifications.Email.SMTPPort = 587
 	return cfg
 }
