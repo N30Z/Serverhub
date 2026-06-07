@@ -476,6 +476,7 @@ function DockerDetail({ metrics }: { metrics: NonNullable<ReturnType<typeof useS
 
 export function WidgetDetailModal({ widgetType, onClose }: Props) {
   const metrics = useStore((s) => s.metrics);
+  const setActiveView = useStore((s) => s.setActiveView);
   if (!metrics) return null;
 
   const renderContent = () => {
@@ -548,7 +549,11 @@ export function WidgetDetailModal({ widgetType, onClose }: Props) {
             <span className="badge badge-green text-[10px]">Live</span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-white transition-colors">
+            <button
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-white transition-colors"
+              title="Widget settings"
+              onClick={() => { onClose(); setActiveView('settings'); }}
+            >
               <Settings2 size={14} />
             </button>
             <button

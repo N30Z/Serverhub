@@ -8,7 +8,8 @@ completed.
 - [ ] Bandwidth Monitor widget — currently a "Coming Soon" placeholder
 - [ ] Log Viewer widget — currently a "Coming Soon" placeholder
 - [ ] Firewall Rules widget — currently a "Coming Soon" placeholder
-- [ ] Widget detail modal "settings" (gear icon) button — non-functional placeholder
+- [x] Widget detail modal "settings" (gear icon) button — now navigates to the
+      Settings page; a proper per-widget config panel is still future work
 
 ## Logs
 - [ ] Real-time log streaming over WebSocket (LogsView currently renders a
@@ -24,14 +25,22 @@ SecurityView currently only shows a roadmap of planned features — none are imp
 - [ ] CIS Benchmark compliance checks
 
 ## Process / Service / Container management
-- [ ] Wire up Service control actions (Start/Stop/Restart) in ServicesView /
-      ServicesWidget — buttons currently don't call the agent API
-- [ ] Wire up Docker container actions (Start/Stop/Restart/Logs/Remove) in
-      DockerView — buttons currently don't call the agent API
+- [x] Wire up Service control actions (Start/Stop/Restart) in ServicesView —
+      now calls `POST /api/services/action` (new agent endpoint, runs `systemctl`)
+- [x] Wire up Docker container actions (Start/Stop/Restart/Remove) in
+      DockerView — now calls `POST /api/docker/action` (new agent endpoint, runs `docker`)
+- [ ] Docker "Logs" button — still a placeholder; needs a streaming log endpoint
+      (likely WebSocket, similar to metrics) before it can be wired up
 
 ## SSH Terminal
-- [ ] Investigate PTY backend error seen in agent logs:
-      `pty read: read /dev/ptmx: input/output error`
+- [ ] Build a real SSH/PTY backend — currently `SSHTerminal.tsx` is fully
+      mocked (hardcoded `DEMO_RESPONSES` map, no agent connection at all).
+      This is a sizeable feature: needs a PTY-allocating WebSocket endpoint
+      in the Go agent (stdin/stdout streaming + resize handling) and a
+      frontend rewrite (e.g. xterm.js) to replace the mock terminal.
+      The previously-seen `pty read: read /dev/ptmx: input/output error`
+      does not correspond to any code currently in the agent — likely from
+      an earlier prototype; revisit once the real PTY handler is built.
 
 ## Alerts & Cron
 - [ ] Replace mock data seeding with real backend API endpoints
