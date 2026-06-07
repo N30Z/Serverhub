@@ -81,9 +81,11 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/api/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/auth/logout", s.withAuth(s.handleLogout))
 	mux.HandleFunc("/api/metrics", s.withAuth(s.handleMetrics))
+	mux.HandleFunc("/api/cron", s.withAuth(s.handleCronList))
 	mux.HandleFunc("/api/services/action", s.withAuth(s.handleServiceAction))
 	mux.HandleFunc("/api/docker/action", s.withAuth(s.handleDockerAction))
 	mux.HandleFunc("/ws", s.handleWS) // token via query param
+	mux.HandleFunc("/api/terminal/ws", s.handleTerminalWS) // token via query param
 	mux.Handle("/", s.spaHandler())
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port)

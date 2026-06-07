@@ -1,4 +1,5 @@
 import { useStore } from '../store/useStore';
+import type { CronJob } from '../types';
 
 class ApiError extends Error {}
 
@@ -34,6 +35,12 @@ export async function dockerAction(id: string, action: DockerAction): Promise<vo
     method: 'POST',
     body: JSON.stringify({ id, action }),
   });
+}
+
+export async function fetchCronJobs(): Promise<CronJob[]> {
+  const res = await authedFetch('/api/cron');
+  const body = await res.json() as { jobs: CronJob[] };
+  return body.jobs ?? [];
 }
 
 export { ApiError };

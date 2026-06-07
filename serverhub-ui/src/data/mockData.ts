@@ -1,5 +1,5 @@
 import type {
-  SystemMetrics, Alert, AlertRule, CronJob, SFTPEntry
+  SystemMetrics, AlertRule, CronJob, SFTPEntry
 } from '../types';
 
 /* ─────────────────────────────────────────────────────────
@@ -103,16 +103,6 @@ export const MOCK_METRICS: SystemMetrics = {
     { id: 'f6a1b2c3d4e5', name: 'monitoring', image: 'grafana/grafana:latest', status: 'running', ports: ['3000:3000'], cpu: 1.8, memory: 256, created: '5d ago', uptime: '5 days' },
   ],
 };
-
-/* ─────────────────────────────────────────────────────────
-   Alerts
-   ───────────────────────────────────────────────────────── */
-export const MOCK_ALERTS: Alert[] = [
-  { id: '3', type: 'docker', severity: 'critical', title: 'Container Stopped', message: 'Container worker-queue has stopped unexpectedly', timestamp: new Date(Date.now() - 1800000).toISOString(), resolved: false, server: 'prod-server-01' },
-  { id: '1', type: 'disk', severity: 'warning', title: 'Low Disk Space', message: '/backup is 80% full (3.2 TB / 4.0 TB used)', timestamp: new Date(Date.now() - 3600000).toISOString(), resolved: false, server: 'prod-server-01' },
-  { id: '2', type: 'cpu', severity: 'warning', title: 'High CPU Usage', message: 'CPU usage exceeded 85% threshold for 5 minutes', timestamp: new Date(Date.now() - 7200000).toISOString(), resolved: true, server: 'prod-server-01' },
-  { id: '4', type: 'service', severity: 'info', title: 'Service Restarted', message: 'nginx was restarted successfully', timestamp: new Date(Date.now() - 86400000).toISOString(), resolved: true, server: 'prod-server-01' },
-];
 
 /* ─────────────────────────────────────────────────────────
    Alert rules

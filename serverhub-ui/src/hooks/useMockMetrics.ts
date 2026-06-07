@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import {
-  MOCK_METRICS, MOCK_ALERTS, MOCK_ALERT_RULES, MOCK_CRON_JOBS,
+  MOCK_METRICS, MOCK_ALERT_RULES, MOCK_CRON_JOBS,
 } from '../data/mockData';
+import { evaluateAlerts } from '../lib/alertEngine';
+import { fetchCronJobs } from '../lib/api';
 import type { SystemMetrics } from '../types';
 
 // ── Dev-mode mock data ────────────────────────────────────────────────────────
@@ -49,15 +51,27 @@ export function useMockMetrics() {
   const { setMetrics, setAlerts, setAlertRules, setCronJobs, authToken } = useStore();
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Derives live alerts from the freshly-applied metrics + the current rules/alerts in
+  // the store, so alerts reflect real system state rather than canned demo data.
+  const applyMetrics = (next: SystemMetrics) => {
+    setMetrics(next);
+    const { alertRules, alerts } = useStore.getState();
+    const { alerts: derived, changed } = evaluateAlerts(next, alertRules, alerts);
+    if (changed) setAlerts(derived);
+  };
+
   useEffect(() => {
-    // Always seed alerts/cron from mock data (real API endpoints are future work)
-    setAlerts(MOCK_ALERTS);
     setAlertRules(MOCK_ALERT_RULES);
-    setCronJobs(MOCK_CRON_JOBS);
 
     // In production mode with a valid auth token, connect to the real agent WebSocket.
     // In dev mode (Vite dev server), fall back to mock data.
     if (import.meta.env.PROD && authToken) {
+      // Real cron jobs come from the agent (reads crontabs); fall back to the
+      // mock list if the request fails so the page still has something to show.
+      fetchCronJobs()
+        .then((jobs) => setCronJobs(jobs.length > 0 ? jobs : MOCK_CRON_JOBS))
+        .catch(() => setCronJobs(MOCK_CRON_JOBS));
+
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const url = `${proto}//${window.location.host}/ws?token=${authToken}`;
 
@@ -67,7 +81,7 @@ export function useMockMetrics() {
 
         ws.onmessage = (evt) => {
           try {
-            setMetrics(JSON.parse(evt.data) as SystemMetrics);
+            applyMetrics(JSON.parse(evt.data) as SystemMetrics);
           } catch { /* ignore malformed frames */ }
         };
 
@@ -89,7 +103,8 @@ export function useMockMetrics() {
     }
 
     // Dev mode: poll mock data
-    const tick = () => setMetrics(buildLiveMetrics());
+    setCronJobs(MOCK_CRON_JOBS);
+    const tick = () => applyMetrics(buildLiveMetrics());
     tick();
     const id = setInterval(tick, 3000);
     return () => clearInterval(id);

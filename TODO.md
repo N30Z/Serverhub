@@ -33,19 +33,34 @@ SecurityView currently only shows a roadmap of planned features — none are imp
       (likely WebSocket, similar to metrics) before it can be wired up
 
 ## SSH Terminal
-- [ ] Build a real SSH/PTY backend — currently `SSHTerminal.tsx` is fully
-      mocked (hardcoded `DEMO_RESPONSES` map, no agent connection at all).
-      This is a sizeable feature: needs a PTY-allocating WebSocket endpoint
-      in the Go agent (stdin/stdout streaming + resize handling) and a
-      frontend rewrite (e.g. xterm.js) to replace the mock terminal.
-      The previously-seen `pty read: read /dev/ptmx: input/output error`
-      does not correspond to any code currently in the agent — likely from
-      an earlier prototype; revisit once the real PTY handler is built.
+- [x] Real PTY backend — `GET/WS /api/terminal/ws` spawns a login shell via
+      `creack/pty`, streaming stdin/stdout/resize over a WebSocket
+      (`serverhub-agent/internal/api/terminal.go`). The frontend now uses
+      `xterm.js` (`@xterm/xterm` + `@xterm/addon-fit`) instead of the old
+      hardcoded `DEMO_RESPONSES` mock — full rewrite of `SSHTerminal.tsx`.
+      Note: this gives a real shell *on the agent's host* (there's no remote
+      SSH multiplexing — "SSH Terminal" means "terminal on this server",
+      consistent with how Service/Docker actions already run local commands).
+- [ ] Multiple real *remote* SSH targets (the tab UI previously implied
+      connecting to different hosts like `db-replica-02`) — out of scope for
+      now; each tab currently opens a session on the agent's own host.
 
 ## Alerts & Cron
-- [ ] Replace mock data seeding with real backend API endpoints
-      (see `useMockMetrics.ts`: "Always seed alerts/cron from mock data —
-      real API endpoints are future work")
+- [x] Alerts are now derived live from real metrics + alert rule thresholds
+      (`src/lib/alertEngine.ts`, wired into `useMockMetrics.ts`) instead of
+      static mock data — e.g. CPU/memory/disk crossing a threshold, a service
+      entering `failed`, or a container stopping all generate/auto-resolve
+      alert entries in real time.
+- [x] Cron jobs are now read from the real system — `GET /api/cron`
+      (`serverhub-agent/internal/api/cron.go`) parses `/etc/crontab`,
+      `/etc/cron.d/*`, and per-user crontabs in `/var/spool/cron/crontabs/`.
+- [ ] Cron execution history (`lastRun`/`lastStatus`) and computed
+      `nextRun` times are not available yet — the agent doesn't track job
+      runs over time, and computing next-run requires a cron-expression
+      parser. These fields render as "—" / "never" until that's built.
+- [ ] Cron job CRUD (create/edit/delete/run-now buttons in `CronManager.tsx`)
+      is still UI-only — writing crontabs safely (locking, validation,
+      per-user permissions) is a separate, riskier follow-up.
 
 ## Versioning
 - [ ] Keep `serverhub-ui/package.json` version and the footer string in
