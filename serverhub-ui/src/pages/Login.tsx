@@ -157,7 +157,7 @@ export default function Login() {
             <Shield size={10} />
             <span>TLS encrypted connection</span>
             <span>·</span>
-            <span>ServerHub v1.0.0</span>
+            <span>ServerHub v1.1.0</span>
           </div>
         </div>
       </div>
