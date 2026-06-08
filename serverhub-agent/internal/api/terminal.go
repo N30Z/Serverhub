@@ -21,7 +21,7 @@ const terminalHTML = `<!DOCTYPE html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
   <title>ServerHub Terminal</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css"/>
+  <link rel="stylesheet" href="/vendor/xterm/xterm.css"/>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body,#t{width:100%;height:100%;background:#0d1117;overflow:hidden}
@@ -29,8 +29,8 @@ const terminalHTML = `<!DOCTYPE html>
 </head>
 <body>
   <div id="t"></div>
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script src="/vendor/xterm/xterm.js"></script>
+  <script src="/vendor/xterm/xterm-addon-fit.js"></script>
   <script>
   const term = new Terminal({
     cursorBlink:true, fontSize:13,
