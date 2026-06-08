@@ -10,6 +10,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -51,9 +53,37 @@ func New(cfg *config.Config, coll *collector.Collector, webFS fs.FS) *Server {
 		cfg:       cfg,
 		collector: coll,
 		webFS:     webFS,
-		sessions:  make(map[string]time.Time),
+		sessions:  loadSessions(),
 		clients:   make(map[*wsClient]struct{}),
 	}
+}
+
+// sessionsStateFile persists login sessions across agent restarts so that
+// clients (e.g. the Android app) stay logged in after a service restart/upgrade.
+const sessionsStateFile = "/etc/serverhub/sessions.json"
+
+func loadSessions() map[string]time.Time {
+	sessions := make(map[string]time.Time)
+	data, err := os.ReadFile(sessionsStateFile)
+	if err != nil {
+		return sessions
+	}
+	if err := json.Unmarshal(data, &sessions); err != nil {
+		return make(map[string]time.Time)
+	}
+	now := time.Now()
+	for token, expiry := range sessions {
+		if now.After(expiry) {
+			delete(sessions, token)
+		}
+	}
+	return sessions
+}
+
+func saveSessions(sessions map[string]time.Time) {
+	os.MkdirAll(filepath.Dir(sessionsStateFile), 0755) //nolint:errcheck
+	data, _ := json.MarshalIndent(sessions, "", "  ")
+	os.WriteFile(sessionsStateFile, data, 0600) //nolint:errcheck
 }
 
 // ListenAndServe starts the HTTP server and the WS broadcaster. Blocks until ctx is cancelled.
@@ -161,6 +191,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Client   string `json:"client"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -171,9 +202,16 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := newToken()
-	expiry := time.Now().Add(time.Duration(s.cfg.Auth.SessionTimeout) * time.Second)
+	// The Android app identifies itself so it can stay logged in indefinitely;
+	// browser sessions keep the configured timeout (and can be force-expired by an admin).
+	timeout := time.Duration(s.cfg.Auth.SessionTimeout) * time.Second
+	if body.Client == "android" {
+		timeout = 100 * 365 * 24 * time.Hour
+	}
+	expiry := time.Now().Add(timeout)
 	s.sessionMu.Lock()
 	s.sessions[token] = expiry
+	saveSessions(s.sessions)
 	s.sessionMu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -184,6 +222,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	token := extractToken(r)
 	s.sessionMu.Lock()
 	delete(s.sessions, token)
+	saveSessions(s.sessions)
 	s.sessionMu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }

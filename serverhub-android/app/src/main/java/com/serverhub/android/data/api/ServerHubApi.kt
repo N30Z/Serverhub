@@ -33,7 +33,7 @@ class ServerHubApi(private val baseUrl: String) {
     suspend fun login(username: String, password: String): Result<String> =
         withContext(Dispatchers.IO) {
             try {
-                val body = """{"username":"$username","password":"$password"}"""
+                val body = """{"username":"$username","password":"$password","client":"android"}"""
                     .toRequestBody(jsonType)
                 val response = client.newCall(
                     Request.Builder().url("$baseUrl/api/auth/login").post(body).build()
