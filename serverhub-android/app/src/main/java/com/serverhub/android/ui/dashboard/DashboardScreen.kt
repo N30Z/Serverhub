@@ -103,8 +103,9 @@ fun DashboardScreen(
                     Text(
                         text = when (connectionState) {
                             is ConnectionState.Connected -> "Live"
+                            is ConnectionState.Connecting -> "Connecting…"
                             is ConnectionState.Disconnected -> "Offline"
-                            is ConnectionState.Error -> "Error"
+                            is ConnectionState.Error -> "Reconnecting…"
                         },
                         fontSize = 11.sp,
                         color = TextSecondary
